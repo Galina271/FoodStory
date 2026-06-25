@@ -9,15 +9,24 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(recipes) { recipe in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(recipe.title)
-                            .font(.headline)
 
-                        Text(recipe.recipeDescription)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+            List {
+
+                ForEach(recipes) { recipe in
+
+                    NavigationLink {
+                        RecipeDetailView(recipe: recipe)
+                    } label: {
+
+                        VStack(alignment: .leading, spacing: 4) {
+
+                            Text(recipe.title)
+                                .font(.headline)
+
+                            Text(recipe.recipeDescription)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
