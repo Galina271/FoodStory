@@ -5,10 +5,12 @@ struct RecipeDetailView: View {
     let recipe: Recipe
 
     var body: some View {
+
         ScrollView {
 
             VStack(alignment: .leading, spacing: 20) {
 
+                // MARK: - Заголовок
                 Text(recipe.title)
                     .font(.largeTitle)
                     .bold()
@@ -16,6 +18,7 @@ struct RecipeDetailView: View {
                 Text(recipe.recipeDescription)
                     .foregroundStyle(.secondary)
 
+                // MARK: - Метаданные
                 HStack {
 
                     Label(
@@ -39,7 +42,29 @@ struct RecipeDetailView: View {
                     .font(.title2)
                     .bold()
 
-                Text("Пока нет ингредиентов")
+                if recipe.ingredients.isEmpty {
+
+                    Text("Пока нет ингредиентов")
+                        .foregroundStyle(.secondary)
+
+                } else {
+
+                    VStack(alignment: .leading, spacing: 8) {
+
+                        ForEach(recipe.ingredients) { ingredient in
+
+                            HStack {
+
+                                Text("• \(ingredient.name)")
+
+                                Spacer()
+
+                                Text("\(formatAmount(ingredient.amount)) \(ingredient.unit.title)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
 
                 Divider()
 
@@ -47,12 +72,33 @@ struct RecipeDetailView: View {
                     .font(.title2)
                     .bold()
 
-                Text("Пока нет шагов")
+                Button {
+
+                    // Пока пусто
+
+                } label: {
+
+                    Label("Начать готовить", systemImage: "play.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+                .buttonStyle(.borderedProminent)
+                    .foregroundStyle(.secondary)
             }
             .padding()
         }
         .navigationTitle(recipe.title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func formatAmount(_ amount: Double) -> String {
+
+        if amount == floor(amount) {
+            return String(Int(amount))
+        }
+
+        return String(amount)
     }
 }
 
@@ -63,7 +109,11 @@ struct RecipeDetailView: View {
             recipeDescription: "Тестовый рецепт",
             servings: 2,
             cookTimeMinutes: 25,
-            difficulty: .medium
+            difficulty: .medium,
+            ingredients: [
+                Ingredient(name: "Спагетти", amount: 200, unit: .gram),
+                Ingredient(name: "Яйца", amount: 2, unit: .piece)
+            ]
         )
     )
 }
