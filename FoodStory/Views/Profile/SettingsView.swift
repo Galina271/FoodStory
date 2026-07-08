@@ -2,18 +2,18 @@
 //  SettingsView.swift
 //  FoodStory
 //
-//  Простые настройки. Пока здесь имя пользователя — оно подставляется в
-//  приветствие на главной и в профиле. Значение хранится в @AppStorage:
-//  это крохотное постоянное хранилище (UserDefaults) для маленьких настроек,
-//  которое само сохраняется между запусками.
+//  Настройки: имя пользователя и выбор темы оформления (7 вариантов).
+//  Тема применяется мгновенно ко всему приложению и сохраняется между запусками.
 //
 
 import SwiftUI
 
 struct SettingsView: View {
-    // Тот же ключ "userName" используется на главной и в профиле —
-    // поэтому имя меняется сразу везде.
     @AppStorage("userName") private var userName = "Галина"
+
+    // Хранитель темы. Чтение его свойств в body подписывает экран на изменения,
+    // поэтому галочка у выбранной темы обновляется сразу.
+    private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         Form {
@@ -21,19 +21,61 @@ struct SettingsView: View {
                 TextField("Как вас зовут?", text: $userName)
             }
 
-            Section("О приложении") {
-                LabeledContent("Версия", value: "1.0")
-                LabeledContent("Рецептов создано с любовью", value: "❤️")
+            Section("Тема оформления") {
+                ForEach(AppThemeOption.allCases) { option in
+                    Button {
+                        theme.selected = option
+                    } label: {
+                        themeRow(option)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
-            Section {
-                Text("Скоро здесь появятся тёмная тема, единицы измерения и напоминания.")
-                    .font(.caption)
-                    .foregroundStyle(Theme.textSecondary)
+            Section("О приложении") {
+                LabeledContent("Версия", value: "1.0")
+                LabeledContent("Сделано с любовью", value: "❤️")
             }
         }
         .navigationTitle("Настройки")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // Одна строка списка тем: образцы цветов + название + галочка у выбранной.
+    private func themeRow(_ option: AppThemeOption) -> some View {
+        HStack(spacing: Metric.spacing) {
+            ThemeSwatch(option: option)
+            Text(option.title)
+                .foregroundStyle(Theme.textPrimary)
+            Spacer()
+            if theme.selected == option {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Theme.accent)
+            }
+        }
+        .contentShape(Rectangle())   // вся строка кликабельна
+    }
+}
+
+// Маленькое превью темы: прямоугольник цвета фона с тремя точками-акцентами.
+private struct ThemeSwatch: View {
+    let option: AppThemeOption
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(option.palette.background)
+            HStack(spacing: 3) {
+                ForEach(Array(option.swatch.enumerated()), id: \.offset) { _, color in
+                    Circle().fill(color).frame(width: 9, height: 9)
+                }
+            }
+        }
+        .frame(width: 56, height: 34)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 

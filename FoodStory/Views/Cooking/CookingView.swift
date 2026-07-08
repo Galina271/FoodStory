@@ -6,6 +6,7 @@ struct CookingView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
+    @Environment(TasteModel.self) private var taste   // модель вкуса
 
     // @State здесь, потому что сессию создаём и держим, пока открыт этот экран.
     @State private var session: CookingSession
@@ -195,6 +196,7 @@ struct CookingView: View {
     private func finishCooking() {
         recipe.cookedCount += 1
         try? context.save()   // сохраняем «сколько раз готовили» в базу
+        taste.train(on: recipe, liked: true)   // приготовила — значит, зашло
         session.stopTimer()
         dismiss()
     }
@@ -202,4 +204,5 @@ struct CookingView: View {
 
 #Preview {
     CookingView(recipe: SampleData.recipes()[0])
+        .environment(TasteModel())
 }

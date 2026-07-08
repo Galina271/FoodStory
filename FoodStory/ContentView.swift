@@ -31,10 +31,14 @@ struct ContentView: View {
                 }
         }
         .tint(Theme.accent)
+        // Светлая/тёмная схема зависит от выбранной темы. Чтение здесь
+        // подписывает вид на ThemeManager — при смене темы всё обновится.
+        .preferredColorScheme(ThemeManager.shared.colorScheme)
     }
 }
 
 #Preview {
     ContentView()
         .modelContainer(for: [Recipe.self, Ingredient.self, Step.self, ShoppingItem.self], inMemory: true)
+        .environment(TasteModel())
 }

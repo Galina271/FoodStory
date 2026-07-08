@@ -16,6 +16,11 @@ struct FoodStoryApp: App {
     // Перечисляем, какие @Model-типы будут сохраняться.
     let container: ModelContainer
 
+    // Наша обучаемая «модель вкуса». Создаём один раз на всё приложение и
+    // раздаём всем экранам через .environment — так любой экран может её
+    // обучать (при лайке/готовке) и спрашивать рекомендации.
+    @State private var tasteModel = TasteModel()
+
     init() {
         do {
             container = try ModelContainer(for: Recipe.self, Ingredient.self, Step.self, ShoppingItem.self)
@@ -28,6 +33,7 @@ struct FoodStoryApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(tasteModel)   // делаем модель вкуса доступной везде
                 .task {
                     // При запуске проверяем: если рецептов ещё нет —
                     // добавляем тестовые, чтобы экран не был пустым.

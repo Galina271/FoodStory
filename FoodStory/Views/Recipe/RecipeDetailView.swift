@@ -14,6 +14,7 @@ struct RecipeDetailView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(TasteModel.self) private var taste   // наша обучаемая модель вкуса
 
     // Какие ингредиенты отмечены галочкой (для будущего списка покупок).
     // Храним имена отмеченных ингредиентов.
@@ -105,6 +106,8 @@ struct RecipeDetailView: View {
     private func toggleFavorite() {
         recipe.isFavorite.toggle()
         try? context.save()
+        // Обучаем модель вкуса: избранное = лайк, снятие = дизлайк.
+        taste.train(on: recipe, liked: recipe.isFavorite)
     }
 
     private func duplicate() {
@@ -276,4 +279,5 @@ struct RecipeDetailView: View {
     NavigationStack {
         RecipeDetailView(recipe: SampleData.recipes()[0])
     }
+    .environment(TasteModel())
 }

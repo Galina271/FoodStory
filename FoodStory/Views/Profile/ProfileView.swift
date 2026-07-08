@@ -59,6 +59,13 @@ struct ProfileView: View {
                         }
                         Divider().padding(.leading, 52)
 
+                        NavigationLink {
+                            TasteProfileView()
+                        } label: {
+                            settingsRow(icon: "sparkles", title: "Вкусовой профиль (ИИ)")
+                        }
+                        Divider().padding(.leading, 52)
+
                         Button {
                             exportPDF()
                         } label: {
@@ -128,4 +135,5 @@ struct ProfileView: View {
 #Preview {
     ProfileView()
         .modelContainer(previewContainer)
+        .environment(TasteModel())
 }

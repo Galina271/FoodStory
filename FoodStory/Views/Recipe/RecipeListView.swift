@@ -16,6 +16,7 @@ struct RecipeListView: View {
 
     // Доступ к базе, чтобы уметь удалять рецепты.
     @Environment(\.modelContext) private var context
+    @Environment(TasteModel.self) private var taste   // модель вкуса
 
     // Текущий способ сортировки. @State — значение, которое может меняться
     // и при изменении перерисовывает экран.
@@ -176,6 +177,7 @@ struct RecipeListView: View {
     private func toggleFavorite(_ recipe: Recipe) {
         recipe.isFavorite.toggle()
         try? context.save()
+        taste.train(on: recipe, liked: recipe.isFavorite)
     }
 
     // Что показываем, когда рецептов нет вообще.
@@ -197,4 +199,5 @@ struct RecipeListView: View {
 #Preview {
     RecipeListView()
         .modelContainer(previewContainer)
+        .environment(TasteModel())
 }
