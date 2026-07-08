@@ -38,6 +38,9 @@ struct AddRecipeView: View {
     // Что выбрал пользователь в системном пикере фото.
     @State private var photoItem: PhotosPickerItem?
 
+    // Определитель категории (Core ML модель или запасной вариант).
+    private let categoryPredictor = CategoryPredictorFactory.make()
+
     // Какой из листов сейчас открыт.
     @State private var showingIngredientSheet = false
     @State private var showingStepSheet = false
@@ -79,6 +82,21 @@ struct AddRecipeView: View {
                     Picker("Категория", selection: $category) {
                         ForEach(RecipeCategory.allCases) { c in
                             Label(c.title, systemImage: c.icon).tag(c)
+                        }
+                    }
+                    // Кнопка появляется, когда есть название — Core ML модель
+                    // подскажет категорию по названию и ингредиентам.
+                    if !title.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Button {
+                            if let predicted = categoryPredictor.predictCategory(
+                                title: title,
+                                ingredients: ingredientDrafts.map { $0.name }
+                            ) {
+                                category = predicted
+                            }
+                        } label: {
+                            Label("Определить категорию автоматически", systemImage: "sparkles")
+                                .font(.subheadline)
                         }
                     }
                     Picker("Сложность", selection: $difficulty) {

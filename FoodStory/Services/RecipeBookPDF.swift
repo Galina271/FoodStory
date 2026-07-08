@@ -72,10 +72,11 @@ private final class PDFDrawer {
     private var contentWidth: CGFloat { pageSize.width - margin * 2 }
     private var maxY: CGFloat { pageSize.height - margin }
 
-    // Цвета книги (в UIKit-формате, потому что рисуем через UIKit).
-    private let ink = UIColor(Theme.textPrimary)
-    private let inkSoft = UIColor(Theme.textSecondary)
-    private let accent = UIColor(Theme.accent)
+    // Цвета книги фиксированные (тёмное на белом), не зависят от темы приложения —
+    // страница PDF всегда белая, поэтому текст должен быть тёмным при любой теме.
+    private let ink = UIColor(red: 0.23, green: 0.18, blue: 0.15, alpha: 1)
+    private let inkSoft = UIColor(red: 0.55, green: 0.51, blue: 0.47, alpha: 1)
+    private let accent = UIColor(red: 0.92, green: 0.54, blue: 0.24, alpha: 1)
 
     init(context: UIGraphicsPDFRendererContext, pageSize: CGSize, margin: CGFloat) {
         self.ctx = context
@@ -171,7 +172,7 @@ private final class PDFDrawer {
             image.draw(in: aspectFillRect(image: image, in: rect))
             ctx.cgContext.restoreGState()
         } else {
-            UIColor(recipe.category.gradient.first ?? Theme.accent).setFill()
+            UIColor(recipe.category.gradient.first ?? .orange).setFill()
             path.fill()
             let title = recipe.category.title
             let attrs: [NSAttributedString.Key: Any] = [

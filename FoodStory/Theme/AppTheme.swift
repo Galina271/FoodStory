@@ -12,33 +12,38 @@ import SwiftUI
 
 // MARK: - Палитра
 
-/// `Theme` — это просто «коробка» с цветами. Мы пишем `Theme.accent`, `Theme.background` и т.д.
-/// `enum` без вариантов используется как пространство имён — внутри только статические свойства.
+/// `Theme` — это «коробка» с цветами. Мы пишем `Theme.accent`, `Theme.background` и т.д.
+/// Раньше цвета были фиксированными. Теперь каждое свойство берёт цвет из ТЕКУЩЕЙ
+/// темы (ThemeManager). Поскольку ThemeManager помечен @Observable, при смене темы
+/// SwiftUI автоматически перекрашивает все экраны, которые читают эти цвета.
 enum Theme {
 
-    // Фон всего экрана — тёплый кремовый, как страница кулинарной книги.
-    static let background = Color(hex: 0xFBF6EF)
+    /// Текущая палитра (набор цветов выбранной темы).
+    static var current: ThemePalette { ThemeManager.shared.palette }
 
-    // Поверхность карточек — чистый белый, чтобы карточки «приподнимались» над фоном.
-    static let card = Color(hex: 0xFFFFFF)
+    // Фон всего экрана.
+    static var background: Color { current.background }
 
-    // Основной акцент — тёплый тыквенный оранжевый (кнопки, активные иконки).
-    static let accent = Color(hex: 0xEA8A3C)
+    // Поверхность карточек.
+    static var card: Color { current.card }
 
-    // Дополнительный акцент — мягкий травяной зелёный (теги, «здоровое», свежесть).
-    static let green = Color(hex: 0x6FA86A)
+    // Основной акцент (кнопки, активные иконки).
+    static var accent: Color { current.accent }
 
-    // Цвет «избранного»/важного — томатно-красный.
-    static let tomato = Color(hex: 0xE0533D)
+    // Дополнительный акцент (теги, «свежесть»).
+    static var green: Color { current.green }
 
-    // Основной текст — тёмно-коричневый (мягче чистого чёрного, выглядит «вкуснее»).
-    static let textPrimary = Color(hex: 0x3A2E26)
+    // Цвет «избранного»/важного.
+    static var tomato: Color { current.tomato }
 
-    // Второстепенный текст — приглушённый коричневый (подписи, метаданные).
-    static let textSecondary = Color(hex: 0x9A8A7C)
+    // Основной текст.
+    static var textPrimary: Color { current.textPrimary }
 
-    // Лёгкая заливка для «капсул»/чипсов под фильтры и теги.
-    static let chip = Color(hex: 0xF1E7DA)
+    // Второстепенный текст (подписи, метаданные).
+    static var textSecondary: Color { current.textSecondary }
+
+    // Лёгкая заливка для «капсул»/чипсов.
+    static var chip: Color { current.chip }
 }
 
 // MARK: - Размеры
