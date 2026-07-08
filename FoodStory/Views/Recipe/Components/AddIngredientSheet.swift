@@ -1,78 +1,73 @@
+//
+//  AddIngredientSheet.swift
+//  FoodStory
+//
+//  Маленький экран («лист»), который выезжает снизу, чтобы добавить один ингредиент.
+//
+//  Чтобы не создавать объекты SwiftData раньше времени, мы работаем с «черновиком» —
+//  простой структурой IngredientDraft. В настоящий @Model она превратится только
+//  при сохранении всего рецепта.
+//
+
 import SwiftUI
 
+// Лёгкий «черновик» ингредиента. struct (значимый тип) — копируется, не сохраняется в базу.
+struct IngredientDraft: Identifiable {
+    let id = UUID()
+    var name: String
+    var amount: Double
+    var unit: IngredientUnit
+}
+
 struct AddIngredientSheet: View {
+    // Замыкание (closure): функция, которую мы вызовем, когда пользователь нажмёт «Добавить».
+    // Через неё «возвращаем» готовый черновик в родительский экран.
+    var onAdd: (IngredientDraft) -> Void
 
-    @Environment(\.dismiss) private var dismiss
-
-    let onSave: (Ingredient) -> Void
+    @Environment(\.dismiss) private var dismiss   // умеет закрывать этот лист
 
     @State private var name = ""
     @State private var amount = ""
     @State private var unit: IngredientUnit = .gram
 
     var body: some View {
-
         NavigationStack {
-
             Form {
+                TextField("Название (например, Мука)", text: $name)
 
-                Section("Ингредиент") {
-
-                    TextField("Название", text: $name)
-
-                    TextField("Количество", text: $amount)
-                        .keyboardType(.decimalPad)
-
+                Section {
+                    if unit.hasAmount {
+                        TextField("Количество", text: $amount)
+                            .keyboardType(.decimalPad)   // цифровая клавиатура
+                    }
                     Picker("Единица", selection: $unit) {
-
-                        ForEach(IngredientUnit.allCases, id: \.self) { unit in
-                            Text(unit.title)
-                                .tag(unit)
+                        ForEach(IngredientUnit.allCases) { u in
+                            Text(u.short).tag(u)
                         }
                     }
                 }
             }
-            .navigationTitle("Новый ингредиент")
+            .navigationTitle("Ингредиент")
             .navigationBarTitleDisplayMode(.inline)
-
             .toolbar {
-
-                ToolbarItem(placement: .topBarLeading) {
-
-                    Button("Отмена") {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Добавить") {
+                        // Запятую заменяем на точку — на русской клавиатуре часто вводят "1,5".
+                        let value = Double(amount.replacingOccurrences(of: ",", with: ".")) ?? 0
+                        let draft = IngredientDraft(name: name, amount: value, unit: unit)
+                        onAdd(draft)
                         dismiss()
                     }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-
-                    Button("Добавить") {
-                        saveIngredient()
-                    }
-                    .disabled(name.isEmpty)
+                    .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)  // пустое имя нельзя
                 }
             }
         }
     }
-
-    private func saveIngredient() {
-
-        let value = Double(amount) ?? 0
-
-        let ingredient = Ingredient(
-            name: name,
-            amount: value,
-            unit: unit
-        )
-
-        onSave(ingredient)
-
-        dismiss()
-    }
 }
 
 #Preview {
-    AddIngredientSheet { _ in
-
-    }
+    AddIngredientSheet { _ in }
 }

@@ -2,17 +2,17 @@
 //  FoodStoryTests.swift
 //  FoodStoryTests
 //
-//  Created by Галина on 25.06.2026.
+//  Здесь пишутся юнит-тесты (проверки логики). Пока один пример-заглушка.
 //
 
 import Testing
+@testable import FoodStory
 
 struct FoodStoryTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @Test func recipeCookingTimeFormatsCorrectly() async throws {
+        let recipe = Recipe(title: "Тест", cookingMinutes: 75)
+        // 75 минут должно показываться как "1 ч 15 мин".
+        #expect(recipe.cookingTimeText == "1 ч 15 мин")
     }
-
 }

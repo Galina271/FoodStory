@@ -2,47 +2,39 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-
-    @State private var isShowingAddRecipe = false
-
-    @Query private var recipes: [Recipe]
-
     var body: some View {
-        NavigationStack {
-
-            List {
-
-                ForEach(recipes) { recipe in
-
-                    NavigationLink {
-                        RecipeDetailView(recipe: recipe)
-                    } label: {
-
-                        VStack(alignment: .leading, spacing: 4) {
-
-                            Text(recipe.title)
-                                .font(.headline)
-
-                            Text(recipe.recipeDescription)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+        // TabView рисует вкладки внизу. Каждая вкладка — отдельный экран.
+        TabView {
+            HomeView()
+                .tabItem {
+                    Label("Главная", systemImage: "house.fill")
                 }
-            }
-            .navigationTitle("Рецепты")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingAddRecipe = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
+
+            RecipeListView()
+                .tabItem {
+                    Label("Рецепты", systemImage: "book.fill")
                 }
-            }
-            .sheet(isPresented: $isShowingAddRecipe) {
-                AddRecipeView()
-            }
+
+            SearchView()
+                .tabItem {
+                    Label("Поиск", systemImage: "magnifyingglass")
+                }
+
+            FridgeView()
+                .tabItem {
+                    Label("Холодильник", systemImage: "refrigerator.fill")
+                }
+
+            ProfileView()
+                .tabItem {
+                    Label("Профиль", systemImage: "person.fill")
+                }
         }
+        .tint(Theme.accent)
     }
+}
+
+#Preview {
+    ContentView()
+        .modelContainer(for: [Recipe.self, Ingredient.self, Step.self, ShoppingItem.self], inMemory: true)
 }

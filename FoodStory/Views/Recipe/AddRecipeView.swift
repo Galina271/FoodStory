@@ -1,159 +1,267 @@
+//
+//  AddRecipeView.swift
+//  FoodStory
+//
+//  Форма рецепта. Один и тот же экран работает в ДВУХ режимах:
+//   • создание нового рецепта  — открываем как AddRecipeView();
+//   • редактирование готового   — открываем как AddRecipeView(recipeToEdit: recipe).
+//
+//  Так нам не нужно два почти одинаковых экрана: логика ввода общая, а по кнопке
+//  «Сохранить» мы либо создаём новый Recipe, либо обновляем существующий.
+//
+
 import SwiftUI
 import SwiftData
+import PhotosUI   // PhotosPicker — системный выбор фото из галереи
 
 struct AddRecipeView: View {
-
+    @Environment(\.modelContext) private var context  // база, куда сохраняем
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
 
-    @State private var title = ""
-    @State private var recipeDescription = ""
+    // Рецепт, который редактируем. Если nil — значит создаём новый.
+    private let recipeToEdit: Recipe?
 
-    @State private var servings = 1
-    @State private var cookTimeMinutes = 30
-    @State private var difficulty: Difficulty = .easy
+    // Поля основной информации. Начальные значения подставляем в init:
+    // при редактировании — из существующего рецепта, при создании — по умолчанию.
+    @State private var title: String
+    @State private var summary: String
+    @State private var difficulty: Difficulty
+    @State private var category: RecipeCategory
+    @State private var cookingMinutes: Int
+    @State private var servings: Int
+    @State private var imageData: Data?
 
-    @State private var ingredients: [Ingredient] = []
+    // Черновики ингредиентов и шагов (простые структуры, пока не сохранены в базу).
+    @State private var ingredientDrafts: [IngredientDraft]
+    @State private var stepDrafts: [StepDraft]
 
-    @State private var isShowingAddIngredient = false
+    // Что выбрал пользователь в системном пикере фото.
+    @State private var photoItem: PhotosPickerItem?
+
+    // Какой из листов сейчас открыт.
+    @State private var showingIngredientSheet = false
+    @State private var showingStepSheet = false
+
+    /// init подготавливает начальное состояние формы.
+    /// `_title = State(initialValue:)` — так задают стартовое значение для @State
+    /// прямо в инициализаторе.
+    init(recipeToEdit: Recipe? = nil) {
+        self.recipeToEdit = recipeToEdit
+        _title = State(initialValue: recipeToEdit?.title ?? "")
+        _summary = State(initialValue: recipeToEdit?.summary ?? "")
+        _difficulty = State(initialValue: recipeToEdit?.difficulty ?? .easy)
+        _category = State(initialValue: recipeToEdit?.category ?? .other)
+        _cookingMinutes = State(initialValue: recipeToEdit?.cookingMinutes ?? 30)
+        _servings = State(initialValue: recipeToEdit?.servings ?? 2)
+        _imageData = State(initialValue: recipeToEdit?.imageData)
+        _ingredientDrafts = State(initialValue: (recipeToEdit?.ingredients ?? []).map {
+            IngredientDraft(name: $0.name, amount: $0.amount, unit: $0.unit)
+        })
+        _stepDrafts = State(initialValue: (recipeToEdit?.sortedSteps ?? []).map {
+            StepDraft(text: $0.text, timerMinutes: ($0.timerSeconds ?? 0) / 60)
+        })
+    }
+
+    // Удобные флаги, чтобы подписи менялись сами.
+    private var isEditing: Bool { recipeToEdit != nil }
 
     var body: some View {
-
         NavigationStack {
-
             Form {
+                // 0. Фото блюда
+                photoSection
 
-                // MARK: - Основная информация
-
-                Section("Основная информация") {
-
-                    TextField("Название рецепта", text: $title)
-
-                    TextField("Описание", text: $recipeDescription)
-
-                    Stepper(
-                        "Порции: \(servings)",
-                        value: $servings,
-                        in: 1...20
-                    )
-
-                    Stepper(
-                        "Время: \(cookTimeMinutes) мин",
-                        value: $cookTimeMinutes,
-                        in: 1...1440
-                    )
-
-                    Picker("Сложность", selection: $difficulty) {
-                        ForEach(Difficulty.allCases, id: \.self) { difficulty in
-                            Text(difficulty.title)
-                                .tag(difficulty)
+                // 1. Основная информация
+                Section("Основное") {
+                    TextField("Название блюда", text: $title)
+                    TextField("Короткое описание", text: $summary, axis: .vertical)
+                        .lineLimit(2...4)
+                    Picker("Категория", selection: $category) {
+                        ForEach(RecipeCategory.allCases) { c in
+                            Label(c.title, systemImage: c.icon).tag(c)
                         }
                     }
+                    Picker("Сложность", selection: $difficulty) {
+                        ForEach(Difficulty.allCases) { d in
+                            Text(d.title).tag(d)
+                        }
+                    }
+                    Stepper("Время: \(cookingMinutes) мин", value: $cookingMinutes, in: 5...600, step: 5)
+                    Stepper("Порций: \(servings)", value: $servings, in: 1...20)
                 }
 
+                // 2. Ингредиенты
                 Section("Ингредиенты") {
-
-                    if ingredients.isEmpty {
-
-                        ContentUnavailableView(
-                            "Пока нет ингредиентов",
-                            systemImage: "carrot"
-                        )
-
-                    } else {
-
-                        ForEach(ingredients) { ingredient in
-
-                            HStack {
-
-                                Text(ingredient.name)
-
-                                Spacer()
-
-                                Text("\(formatAmount(ingredient.amount)) \(ingredient.unit.title)")
-                                    .foregroundStyle(.secondary)
-                            }
+                    ForEach(ingredientDrafts) { draft in
+                        HStack {
+                            Text(draft.name)
+                            Spacer()
+                            Text(displayDraft(draft))
+                                .foregroundStyle(Theme.textSecondary)
                         }
-                        .onDelete(perform: deleteIngredient)
+                    }
+                    .onDelete { offsets in
+                        ingredientDrafts.remove(atOffsets: offsets)
                     }
 
                     Button {
-
-                        isShowingAddIngredient = true
-
+                        showingIngredientSheet = true
                     } label: {
+                        Label("Добавить ингредиент", systemImage: "plus.circle")
+                    }
+                }
 
-                        Label(
-                            "Добавить ингредиент",
-                            systemImage: "plus.circle.fill"
-                        )
+                // 3. Шаги
+                Section("Шаги приготовления") {
+                    ForEach(stepDrafts) { draft in
+                        HStack(alignment: .top) {
+                            if let index = stepDrafts.firstIndex(where: { $0.id == draft.id }) {
+                                Text("\(index + 1).")
+                                    .foregroundStyle(Theme.accent)
+                            }
+                            Text(draft.text)
+                        }
+                    }
+                    .onDelete { offsets in
+                        stepDrafts.remove(atOffsets: offsets)
+                    }
+                    .onMove { from, to in
+                        stepDrafts.move(fromOffsets: from, toOffset: to)
+                    }
+
+                    Button {
+                        showingStepSheet = true
+                    } label: {
+                        Label("Добавить шаг", systemImage: "plus.circle")
                     }
                 }
             }
-            .navigationTitle("Новый рецепт")
+            .navigationTitle(isEditing ? "Редактировать" : "Новый рецепт")
             .navigationBarTitleDisplayMode(.inline)
-
             .toolbar {
-
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Сохранить") { save() }
+                        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
                 ToolbarItem(placement: .topBarLeading) {
-
-                    Button("Отмена") {
-                        dismiss()
-                    }
-                }
-
-                ToolbarItem(placement: .topBarTrailing) {
-
-                    Button("Сохранить") {
-                        saveRecipe()
-                    }
-                    .disabled(
-                        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    )
+                    EditButton()   // включает режим удаления/перетаскивания
                 }
             }
-
-            .sheet(isPresented: $isShowingAddIngredient) {
-
-                AddIngredientSheet { ingredient in
-
-                    ingredients.append(ingredient)
+            // Когда пользователь выбрал фото — загружаем его байты в imageData.
+            .onChange(of: photoItem) { _, newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                        imageData = data
+                    }
+                }
+            }
+            .sheet(isPresented: $showingIngredientSheet) {
+                AddIngredientSheet { draft in
+                    ingredientDrafts.append(draft)
+                }
+            }
+            .sheet(isPresented: $showingStepSheet) {
+                AddStepSheet { draft in
+                    stepDrafts.append(draft)
                 }
             }
         }
     }
 
-    private func saveRecipe() {
+    // Секция выбора фото: превью (если есть) + кнопка выбрать/заменить + удалить.
+    private var photoSection: some View {
+        Section("Фото блюда") {
+            if let imageData, let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 180)
+                    .frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: Metric.smallRadius))
+                    .listRowInsets(EdgeInsets())
 
-        let recipe = Recipe(
-            title: title,
-            recipeDescription: recipeDescription,
-            servings: servings,
-            cookTimeMinutes: cookTimeMinutes,
-            difficulty: difficulty,
-            ingredients: ingredients
-        )
+                Button(role: .destructive) {
+                    self.imageData = nil
+                    photoItem = nil
+                } label: {
+                    Label("Удалить фото", systemImage: "trash")
+                }
+            }
 
-        modelContext.insert(recipe)
+            PhotosPicker(selection: $photoItem, matching: .images) {
+                Label(imageData == nil ? "Выбрать фото" : "Заменить фото",
+                      systemImage: "photo")
+            }
+        }
+    }
 
+    private func displayDraft(_ draft: IngredientDraft) -> String {
+        guard draft.unit.hasAmount else { return draft.unit.short }
+        let number = draft.amount.truncatingRemainder(dividingBy: 1) == 0
+            ? String(Int(draft.amount)) : String(draft.amount)
+        return "\(number) \(draft.unit.short)"
+    }
+
+    // Сохранение: либо обновляем существующий рецепт, либо создаём новый.
+    private func save() {
+        // Собираем свежие ингредиенты и шаги из черновиков.
+        let ingredients = ingredientDrafts.map {
+            Ingredient(name: $0.name, amount: $0.amount, unit: $0.unit)
+        }
+        let steps = stepDrafts.enumerated().map { index, draft in
+            Step(
+                order: index + 1,
+                text: draft.text,
+                timerSeconds: draft.timerMinutes > 0 ? draft.timerMinutes * 60 : nil
+            )
+        }
+
+        if let recipe = recipeToEdit {
+            // РЕДАКТИРОВАНИЕ: обновляем поля существующего рецепта.
+            recipe.title = title
+            recipe.summary = summary
+            recipe.difficulty = difficulty
+            recipe.category = category
+            recipe.cookingMinutes = cookingMinutes
+            recipe.servings = servings
+            recipe.imageData = imageData
+
+            // Старые ингредиенты и шаги удаляем из базы, чтобы не остались «висеть»,
+            // и подставляем новые.
+            for old in recipe.ingredients { context.delete(old) }
+            for old in recipe.steps { context.delete(old) }
+            recipe.ingredients = ingredients
+            recipe.steps = steps
+        } else {
+            // СОЗДАНИЕ: делаем новый рецепт и кладём в базу.
+            let recipe = Recipe(
+                title: title,
+                summary: summary,
+                difficulty: difficulty,
+                category: category,
+                cookingMinutes: cookingMinutes,
+                servings: servings,
+                imageData: imageData,
+                ingredients: ingredients,
+                steps: steps
+            )
+            context.insert(recipe)
+        }
+
+        try? context.save()
         dismiss()
-    }
-
-    private func deleteIngredient(at offsets: IndexSet) {
-
-        ingredients.remove(atOffsets: offsets)
-    }
-
-    private func formatAmount(_ amount: Double) -> String {
-
-        if amount == floor(amount) {
-            return String(Int(amount))
-        }
-
-        return String(amount)
     }
 }
 
-#Preview {
+#Preview("Создание") {
     AddRecipeView()
+        .modelContainer(previewContainer)
+}
+
+#Preview("Редактирование") {
+    AddRecipeView(recipeToEdit: SampleData.recipes()[0])
+        .modelContainer(previewContainer)
 }

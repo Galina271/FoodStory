@@ -1,53 +1,74 @@
+//
+//  Recipe.swift
+//  FoodStory
+//
+//  Главная модель — Рецепт. Она связана с ингредиентами и шагами.
+//
+
 import Foundation
 import SwiftData
 
 @Model
 final class Recipe {
-    var id: UUID
     var title: String
-    var recipeDescription: String
-    var servings: Int
-    var cookTimeMinutes: Int
+    var summary: String
     var difficulty: Difficulty
-    var imagePath: String?
-    
+    var category: RecipeCategory = RecipeCategory.other   // тип блюда (для заглушки-картинки и фильтров)
+    var cookingMinutes: Int
+    var servings: Int              // количество порций
+    var isFavorite: Bool           // в избранном ли рецепт
+    var createdAt: Date            // когда создан (для сортировки «по дате»)
+    var cookedCount: Int = 0       // сколько раз готовили (для «популярного»)
+
+    // Фото блюда, которое пользователь выбрал из галереи или снял камерой.
+    // Храним как «сырые байты» (Data) прямо в базе. Если фото нет (nil) —
+    // рисуем красивую заглушку по категории. @Attribute(.externalStorage)
+    // подсказывает SwiftData хранить большие данные (фото) в отдельном файле,
+    // а не раздувать саму базу — так приложение остаётся быстрым.
+    @Attribute(.externalStorage) var imageData: Data?
+
     @Relationship(deleteRule: .cascade)
     var ingredients: [Ingredient]
 
     @Relationship(deleteRule: .cascade)
     var steps: [Step]
-    
-    @Relationship(deleteRule: .cascade)
-    var cookingSessions: [CookingSession]
-
-    var createdAt: Date
-    var updatedAt: Date
 
     init(
-        id: UUID = UUID(),
         title: String,
-        recipeDescription: String = "",
-        servings: Int,
-        cookTimeMinutes: Int,
-        difficulty: Difficulty,
-        imagePath: String? = nil,
+        summary: String = "",
+        difficulty: Difficulty = .easy,
+        category: RecipeCategory = .other,
+        cookingMinutes: Int = 30,
+        servings: Int = 2,
+        isFavorite: Bool = false,
+        imageData: Data? = nil,
         ingredients: [Ingredient] = [],
-        steps: [Step] = [],
-        cookingSessions: [CookingSession] = [],
-        createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        steps: [Step] = []
     ) {
-        self.id = id
         self.title = title
-        self.recipeDescription = recipeDescription
-        self.servings = servings
-        self.cookTimeMinutes = cookTimeMinutes
+        self.summary = summary
         self.difficulty = difficulty
-        self.imagePath = imagePath
+        self.category = category
+        self.cookingMinutes = cookingMinutes
+        self.servings = servings
+        self.isFavorite = isFavorite
+        self.imageData = imageData
+        self.createdAt = Date()
+        self.cookedCount = 0
         self.ingredients = ingredients
         self.steps = steps
-        self.cookingSessions = cookingSessions
-        self.createdAt = createdAt
-        self.updatedAt = updatedAt
+    }
+
+    var sortedSteps: [Step] {
+        steps.sorted { $0.order < $1.order }
+    }
+
+    var cookingTimeText: String {
+        if cookingMinutes >= 60 {
+            let hours = cookingMinutes / 60
+            let minutes = cookingMinutes % 60
+            return minutes == 0 ? "\(hours) ч" : "\(hours) ч \(minutes) мин"
+        }
+        return "\(cookingMinutes) мин"
     }
 }
