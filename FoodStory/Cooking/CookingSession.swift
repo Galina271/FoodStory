@@ -12,6 +12,11 @@
 
 import Foundation
 import Observation
+import UserNotifications   // локальные уведомления (работают, даже если приложение свернуто)
+import AudioToolbox        // системный звук
+#if canImport(UIKit)
+import UIKit               // вибрация-отклик
+#endif
 
 @Observable
 final class CookingSession {
@@ -25,6 +30,9 @@ final class CookingSession {
 
     // timer держим отдельно, чтобы уметь его останавливать
     @ObservationIgnored private var timer: Timer?
+
+    // Идентификатор запланированного уведомления — по нему его можно отменить.
+    @ObservationIgnored private let notificationID = UUID().uuidString
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -81,13 +89,16 @@ final class CookingSession {
         remainingSeconds = seconds
         isTimerRunning = true
         timer?.invalidate()
+        // Планируем уведомление на момент окончания — оно сработает, даже если
+        // приложение свёрнуто (тогда обычный Timer «засыпает»).
+        scheduleNotification(after: seconds)
         // Каждую секунду уменьшаем счётчик на 1.
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             guard let self else { return }
             if self.remainingSeconds > 0 {
                 self.remainingSeconds -= 1
             } else {
-                self.stopTimer()
+                self.timerFinished()
             }
         }
     }
@@ -96,6 +107,42 @@ final class CookingSession {
         timer?.invalidate()
         timer = nil
         isTimerRunning = false
+        cancelNotification()   // таймер остановлен вручную — уведомление не нужно
+    }
+
+    // Таймер доиграл до конца, когда приложение открыто: звук + вибрация.
+    private func timerFinished() {
+        stopTimer()   // остановит и отменит запланированное уведомление (звук дадим сами)
+        playAlert()
+    }
+
+    private func playAlert() {
+        AudioServicesPlaySystemSound(1005)   // короткий системный звук
+        #if canImport(UIKit)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+    }
+
+    // MARK: - Локальные уведомления
+
+    /// Спросить разрешение на уведомления (вызываем при входе в режим готовки).
+    static func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    private func scheduleNotification(after seconds: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = "Таймер готов ⏰"
+        content.body = currentStep.map { "«\(recipe.title)» — \($0.text)" } ?? "Пора к следующему шагу!"
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(seconds), repeats: false)
+        let request = UNNotificationRequest(identifier: notificationID, content: content, trigger: trigger)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    private func cancelNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
     }
 
     /// Таймер в формате "04:35".

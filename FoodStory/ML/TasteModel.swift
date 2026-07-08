@@ -45,12 +45,14 @@ final class TasteModel {
     // Файл, куда сохраняем модель, чтобы обучение не пропадало между запусками.
     // @ObservationIgnored — за этим полем не нужно «следить» для перерисовки.
     @ObservationIgnored
-    private let fileURL: URL = {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return dir.appendingPathComponent("taste_model.json")
-    }()
+    private let fileURL: URL
 
-    init() {
+    /// В обычной жизни путь берётся по умолчанию (папка Documents приложения).
+    /// В тестах можно передать свой временный файл, чтобы не трогать реальные данные.
+    init(fileURL: URL? = nil) {
+        self.fileURL = fileURL ?? FileManager.default
+            .urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("taste_model.json")
         load()
     }
 

@@ -29,12 +29,29 @@ struct RecipeDetailView: View {
     // Показываем ли подтверждение удаления.
     @State private var showingDeleteConfirm = false
 
+    // На сколько порций пересчитывать ингредиенты (стартуем с числа из рецепта).
+    @State private var servings: Int
+
+    init(recipe: Recipe) {
+        self.recipe = recipe
+        _servings = State(initialValue: recipe.servings)
+    }
+
+    // Во сколько раз масштабировать количества относительно рецепта.
+    private var scaleFactor: Double {
+        Double(servings) / Double(max(recipe.servings, 1))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Metric.padding) {
 
                 header
                 metadata
+                if recipe.rating > 0 || !recipe.notes.isEmpty {
+                    ratingSection
+                }
+                portionsSection
                 ingredientsSection
                 stepsSection
 
@@ -130,7 +147,8 @@ struct RecipeDetailView: View {
             : recipe.ingredients.filter { checkedIngredients.contains($0.name) }
 
         for ingredient in chosen {
-            let detail = ingredient.unit.hasAmount ? ingredient.displayAmount : ""
+            // В список кладём количество с учётом выбранного числа порций.
+            let detail = ingredient.unit.hasAmount ? ingredient.scaledDisplayAmount(scaleFactor) : ""
             context.insert(ShoppingItem(name: ingredient.name, detail: detail))
         }
         try? context.save()
@@ -155,9 +173,83 @@ struct RecipeDetailView: View {
     private var metadata: some View {
         HStack(spacing: Metric.spacing) {
             metaPill(icon: "clock", text: recipe.cookingTimeText)
-            metaPill(icon: "person.2", text: "\(recipe.servings) порц.")
+            metaPill(icon: "person.2", text: "\(servings) порц.")
             metaPill(icon: recipe.difficulty.icon, text: recipe.difficulty.title, color: recipe.difficulty.color)
         }
+    }
+
+    // Оценка и заметка после последней готовки (показываем, если есть).
+    private var ratingSection: some View {
+        VStack(alignment: .leading, spacing: Metric.spacing) {
+            if recipe.rating > 0 {
+                HStack(spacing: 4) {
+                    ForEach(1...5, id: \.self) { star in
+                        Image(systemName: star <= recipe.rating ? "star.fill" : "star")
+                            .foregroundStyle(star <= recipe.rating ? Theme.accent : Theme.textSecondary)
+                    }
+                }
+            }
+            if !recipe.notes.isEmpty {
+                Text(recipe.notes)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textPrimary)
+            }
+        }
+        .padding(Metric.padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    // Блок «Порции»: можно нажимать −/＋ или вписать число вручную.
+    // Количества ингредиентов ниже пересчитываются автоматически.
+    private var portionsSection: some View {
+        HStack(spacing: Metric.spacing) {
+            Image(systemName: "person.2.fill")
+                .foregroundStyle(Theme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Порции")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(Theme.textPrimary)
+                Text(servings == recipe.servings ? "как в рецепте" : "пересчитано с \(recipe.servings)")
+                    .font(.caption)
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            Spacer()
+            HStack(spacing: 14) {
+                Button { setServings(servings - 1) } label: {
+                    Image(systemName: "minus.circle.fill")
+                }
+                .buttonStyle(.plain)
+
+                TextField("", value: $servings, format: .number)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 46)
+                    .padding(.vertical, 6)
+                    .background(Theme.chip)
+                    .clipShape(RoundedRectangle(cornerRadius: Metric.smallRadius))
+                    .foregroundStyle(Theme.textPrimary)
+
+                Button { setServings(servings + 1) } label: {
+                    Image(systemName: "plus.circle.fill")
+                }
+                .buttonStyle(.plain)
+            }
+            .font(.title2)
+            .foregroundStyle(Theme.accent)
+        }
+        .padding(Metric.padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+        // Держим число в разумных пределах, даже если вписали вручную.
+        .onChange(of: servings) { _, newValue in
+            let clamped = min(max(newValue, 1), 50)
+            if clamped != newValue { servings = clamped }
+        }
+    }
+
+    private func setServings(_ n: Int) {
+        servings = min(max(n, 1), 50)
     }
 
     private func metaPill(icon: String, text: String, color: Color = Theme.accent) -> some View {
@@ -204,7 +296,7 @@ struct RecipeDetailView: View {
                         Text(ingredient.name)
                             .foregroundStyle(Theme.textPrimary)
                         Spacer()
-                        Text(ingredient.displayAmount)
+                        Text(ingredient.scaledDisplayAmount(scaleFactor))
                             .foregroundStyle(Theme.textSecondary)
                     }
                 }

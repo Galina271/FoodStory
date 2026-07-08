@@ -5,14 +5,15 @@ struct CookingView: View {
     let recipe: Recipe
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var context
-    @Environment(TasteModel.self) private var taste   // модель вкуса
 
     // @State здесь, потому что сессию создаём и держим, пока открыт этот экран.
     @State private var session: CookingSession
 
     // Открыт ли лист «рецепт целиком».
     @State private var showingFullRecipe = false
+
+    // Открыт ли экран оценки после готовки.
+    @State private var showingResult = false
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -48,6 +49,8 @@ struct CookingView: View {
             #if os(iOS)
             UIApplication.shared.isIdleTimerDisabled = true
             #endif
+            // Спросим разрешение на уведомления — чтобы таймер оповестил даже в фоне.
+            CookingSession.requestNotificationPermission()
         }
         .onDisappear {
             #if os(iOS)
@@ -57,6 +60,10 @@ struct CookingView: View {
         // Лист с полным рецептом — можно открыть в любой момент готовки.
         .sheet(isPresented: $showingFullRecipe) {
             RecipeOverviewSheet(recipe: recipe)
+        }
+        // Экран оценки после готовки. Когда он завершится — закрываем режим готовки.
+        .sheet(isPresented: $showingResult) {
+            CookResultSheet(recipe: recipe) { dismiss() }
         }
     }
 
@@ -168,7 +175,8 @@ struct CookingView: View {
 
             if session.isLastStep {
                 Button {
-                    finishCooking()
+                    session.stopTimer()
+                    showingResult = true   // спросим оценку, затем закроем готовку
                 } label: {
                     Label("Готово", systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
@@ -192,14 +200,6 @@ struct CookingView: View {
         }
     }
 
-    // По завершении: увеличиваем счётчик «сколько раз готовили» и закрываем экран.
-    private func finishCooking() {
-        recipe.cookedCount += 1
-        try? context.save()   // сохраняем «сколько раз готовили» в базу
-        taste.train(on: recipe, liked: true)   // приготовила — значит, зашло
-        session.stopTimer()
-        dismiss()
-    }
 }
 
 #Preview {
