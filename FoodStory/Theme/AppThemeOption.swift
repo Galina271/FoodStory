@@ -32,7 +32,8 @@ struct ThemePalette {
 // MARK: - Темы
 
 enum AppThemeOption: String, CaseIterable, Identifiable {
-    case classic    // кремово-оранжевая (по умолчанию)
+    case system     // как в системе (авто светлая/тёмная)
+    case classic    // кремово-оранжевая
     case dark       // тёмная
     case ocean      // морская сине-бирюзовая
     case forest     // лесная зелёная
@@ -45,6 +46,7 @@ enum AppThemeOption: String, CaseIterable, Identifiable {
     /// Название для интерфейса.
     var title: String {
         switch self {
+        case .system:  return "Как в системе"
         case .classic: return "Классическая"
         case .dark:    return "Тёмная"
         case .ocean:   return "Морская"
@@ -59,9 +61,13 @@ enum AppThemeOption: String, CaseIterable, Identifiable {
     /// подстроились под светлую/тёмную гамму.
     var isDark: Bool { self == .dark }
 
-    /// Полный набор цветов темы.
+    /// Полный набор цветов темы. Для «как в системе» здесь возвращается светлая
+    /// палитра как запасная — реальный выбор светлая/тёмная делает ThemeManager
+    /// в зависимости от системной схемы.
     var palette: ThemePalette {
         switch self {
+        case .system:
+            return AppThemeOption.classic.palette
         case .classic:
             return ThemePalette(
                 background: Color(hex: 0xFBF6EF), card: Color(hex: 0xFFFFFF),
@@ -108,7 +114,15 @@ enum AppThemeOption: String, CaseIterable, Identifiable {
     }
 
     /// Три цвета-образца для превью в списке тем.
-    var swatch: [Color] { [palette.accent, palette.green, palette.tomato] }
+    var swatch: [Color] {
+        if self == .system {
+            // Намёк на «авто»: светлый фон, тёмный фон и акцент.
+            return [AppThemeOption.classic.palette.background,
+                    AppThemeOption.dark.palette.background,
+                    AppThemeOption.classic.palette.accent]
+        }
+        return [palette.accent, palette.green, palette.tomato]
+    }
 }
 
 // MARK: - Хранитель текущей темы
@@ -125,14 +139,33 @@ final class ThemeManager {
         didSet { UserDefaults.standard.set(selected.rawValue, forKey: Self.storageKey) }
     }
 
+    /// Текущая системная схема (светлая/тёмная). Её сообщает ContentView.
+    /// Нужна только для темы «как в системе».
+    var systemColorScheme: ColorScheme = .light
+
     private init() {
         let saved = UserDefaults.standard.string(forKey: Self.storageKey)
-        selected = AppThemeOption(rawValue: saved ?? "") ?? .classic
+        selected = AppThemeOption(rawValue: saved ?? "") ?? .system
     }
 
     /// Текущая палитра — её читают все цвета Theme.*.
-    var palette: ThemePalette { selected.palette }
+    /// Для «как в системе» выбираем светлую или тёмную по системной схеме.
+    var palette: ThemePalette {
+        switch selected {
+        case .system:
+            return (systemColorScheme == .dark ? AppThemeOption.dark : .classic).palette
+        default:
+            return selected.palette
+        }
+    }
 
     /// Светлая/тёмная схема для системных элементов.
-    var colorScheme: ColorScheme? { selected.isDark ? .dark : .light }
+    /// nil для «как в системе» — значит «следовать за устройством».
+    var colorScheme: ColorScheme? {
+        switch selected {
+        case .system: return nil
+        case .dark:   return .dark
+        default:      return .light
+        }
+    }
 }

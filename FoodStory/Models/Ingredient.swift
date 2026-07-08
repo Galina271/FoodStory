@@ -37,4 +37,17 @@ final class Ingredient {
             : String(amount)
         return "\(number) \(unit.short)"
     }
+
+    /// Количество, пересчитанное под другое число порций.
+    /// Например, при factor = 2 (порций стало вдвое больше) «200 г» станет «400 г».
+    /// У «по вкусу» количества нет — возвращаем как есть.
+    func scaledDisplayAmount(_ factor: Double) -> String {
+        guard unit.hasAmount else { return unit.short }
+        let scaled = amount * factor
+        // Целое показываем без дробей ("400 г"), иначе — с одним знаком ("2.5 ст.л.").
+        let number = scaled.truncatingRemainder(dividingBy: 1) == 0
+            ? String(Int(scaled))
+            : String(format: "%.1f", scaled)
+        return "\(number) \(unit.short)"
+    }
 }
