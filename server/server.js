@@ -1,70 +1,108 @@
 //
-// FoodStory — сервер-прокси к Claude.
+// FoodStory — сервер-прокси к нейросети (Gemini или Claude).
 //
-// Зачем нужен: секретный ключ Anthropic НЕЛЬЗЯ класть в приложение (его легко
-// достать из установленного приложения). Поэтому ключ хранится ЗДЕСЬ, на сервере,
-// а приложение обращается к этому серверу. Сервер сам вызывает Claude и возвращает
-// текст рецепта.
+// Зачем: секретный ключ нельзя класть в приложение. Он хранится ЗДЕСЬ, а
+// приложение обращается к этому серверу. Сервер сам вызывает нейросеть.
+//
+// Какой «мозг» использовать — выбирается автоматически:
+//   • если задан GEMINI_API_KEY  → Gemini (бесплатный тариф Google);
+//   • иначе если ANTHROPIC_API_KEY → Claude (платный).
+// Можно задать явно переменной AI_PROVIDER = gemini | claude.
 //
 // Запуск локально:
-//   cd server && npm install && ANTHROPIC_API_KEY=sk-ant-... npm start
-//
-// Переменные окружения:
-//   ANTHROPIC_API_KEY — ключ Anthropic (обязательно).
-//   CLAUDE_MODEL      — модель (по умолчанию claude-opus-4-8).
-//   APP_SHARED_TOKEN  — если задан, приложение должно прислать такой же токен
-//                       в заголовке x-app-token (простая защита от чужих запросов).
-//   PORT              — порт (по умолчанию 8787).
+//   cd server && npm install && GEMINI_API_KEY=... npm start
 //
 
 import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
 
-// Ловим любые неожиданные ошибки, чтобы сервер НИКОГДА не падал молча.
+// Ловим любые неожиданные ошибки, чтобы сервер не падал молча.
 process.on("unhandledRejection", (reason) => console.error("unhandledRejection:", reason));
 process.on("uncaughtException", (err) => console.error("uncaughtException:", err));
 
 const app = express();
 app.use(express.json());
 
-// .trim() убирает случайные пробелы/переносы строки по краям — частая причина
-// «invalid x-api-key» при копировании ключа в панель хостинга.
-const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-const model = (process.env.CLAUDE_MODEL || "claude-opus-4-8").trim();
 const appToken = process.env.APP_SHARED_TOKEN?.trim() || null;
 
-// Проверяем ключ на типичные ошибки (пустой, с примером-placeholder'ом, не тот формат).
-function keyProblem(key) {
-  if (!key) return "не задан ANTHROPIC_API_KEY";
-  if (!/^[\x00-\x7F]+$/.test(key)) {
-    return "ключ содержит не-латинские символы — похоже, вставлен пример «ТВОЙ_КЛЮЧ», а не настоящий ключ";
+// Ключи. .trim() убирает случайные пробелы/переносы по краям (частая ошибка копирования).
+const geminiKey = process.env.GEMINI_API_KEY?.trim();
+const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+
+// Какой провайдер использовать.
+const provider = (process.env.AI_PROVIDER || (geminiKey ? "gemini" : "claude")).toLowerCase();
+
+const geminiModel = (process.env.GEMINI_MODEL || "gemini-2.0-flash").trim();
+const claudeModel = (process.env.CLAUDE_MODEL || "claude-opus-4-8").trim();
+
+// Клиент Claude нужен только для провайдера claude.
+const anthropic = anthropicKey ? new Anthropic({ apiKey: anthropicKey }) : null;
+
+const SYSTEM = "Ты дружелюбный кулинарный помощник. Предлагай простые и понятные домашние рецепты.";
+
+// Настроен ли выбранный провайдер? Возвращает текст проблемы или null.
+function configProblem() {
+  if (provider === "gemini") {
+    return geminiKey ? null : "не задан GEMINI_API_KEY";
   }
-  if (!key.startsWith("sk-ant-")) return "ключ должен начинаться с «sk-ant-»";
-  return null;
+  if (provider === "claude") {
+    if (!anthropicKey) return "не задан ANTHROPIC_API_KEY";
+    if (!/^[\x00-\x7F]+$/.test(anthropicKey)) return "ключ Claude содержит не-латинские символы (вставлен пример?)";
+    if (!anthropicKey.startsWith("sk-ant-")) return "ключ Claude должен начинаться с «sk-ant-»";
+    return null;
+  }
+  return `неизвестный провайдер: ${provider}`;
 }
+const issue = configProblem();
+if (issue) console.error("⚠️  Проблема с настройкой:", issue);
 
-const keyIssue = keyProblem(apiKey);
-if (keyIssue) console.error("⚠️  Проблема с ключом:", keyIssue);
-
-// Клиент создаём только если ключ выглядит корректным.
-const client = keyIssue ? null : new Anthropic({ apiKey });
-
-// Проверка живости — удобно после деплоя открыть /health в браузере.
+// Проверка живости.
 app.get("/health", (req, res) => {
-  res.json({ ok: true, configured: Boolean(client), model, keyIssue });
+  const model = provider === "gemini" ? geminiModel : claudeModel;
+  res.json({ ok: true, provider, model, configured: !issue, issue });
 });
 
-// Основной эндпоинт: принимает продукты и пожелание, возвращает { text }.
-// Ошибки возвращаем со статусом 200 и полем error — так их не «съедает» туннель
-// (Cloudflare заменяет 5xx своей страницей), и приложение может показать причину.
+// Универсальная генерация: вызывает выбранный провайдер, возвращает текст.
+async function generateRecipe(userPrompt) {
+  if (provider === "gemini") {
+    // REST-запрос к Gemini (без отдельной библиотеки).
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { maxOutputTokens: 1024 },
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(`${resp.status} ${data?.error?.message || "ошибка Gemini"}`);
+    }
+    return (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text).join("");
+  }
+
+  // Claude.
+  const message = await anthropic.messages.create({
+    model: claudeModel,
+    max_tokens: 1024,
+    system: SYSTEM,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+  return message.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+}
+
+// Основной эндпоинт. Ошибки отдаём со статусом 200 в поле error, чтобы их не
+// «съедал» туннель/прокси и приложение могло показать причину.
 app.post("/suggest", async (req, res) => {
-  console.log("[/suggest] запрос получен:", JSON.stringify(req.body));
+  console.log("[/suggest] запрос:", JSON.stringify(req.body));
   try {
     if (appToken && req.get("x-app-token") !== appToken) {
       return res.json({ error: "Неверный токен приложения." });
     }
-    if (!client) {
-      return res.json({ error: `Сервер не настроен: ${keyIssue}.` });
+    if (issue) {
+      return res.json({ error: `Сервер не настроен: ${issue}.` });
     }
 
     const products = Array.isArray(req.body?.products) ? req.body.products : [];
@@ -77,29 +115,17 @@ app.post("/suggest", async (req, res) => {
       `Предложи один рецепт: короткое описание, список ингредиентов и пошаговые шаги. ` +
       `Отвечай на русском языке.`;
 
-    const message = await client.messages.create({
-      model,
-      max_tokens: 1024,
-      system: "Ты дружелюбный кулинарный помощник. Предлагай простые и понятные домашние рецепты.",
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    const text = message.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("");
-
-    console.log("[/suggest] успех, символов:", text.length);
+    const text = await generateRecipe(userPrompt);
+    console.log(`[/suggest] успех (${provider}), символов:`, text.length);
     res.json({ text: text || "Не удалось получить ответ. Попробуйте ещё раз." });
   } catch (err) {
-    // Показываем настоящую причину (статус + сообщение от Anthropic).
-    const detail = `${err?.status ?? ""} ${err?.error?.error?.message ?? err?.message ?? err}`.trim();
-    console.error("[/suggest] ОШИБКА Claude:", detail);
-    res.json({ error: `Claude: ${detail}` });
+    const detail = err?.message || String(err);
+    console.error(`[/suggest] ОШИБКА (${provider}):`, detail);
+    res.json({ error: `${provider}: ${detail}` });
   }
 });
 
 const port = process.env.PORT || 8787;
 app.listen(port, () => {
-  console.log(`FoodStory server on http://localhost:${port} (configured=${Boolean(client)})`);
+  console.log(`FoodStory server on :${port} provider=${provider} configured=${!issue}`);
 });
