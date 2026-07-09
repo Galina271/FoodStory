@@ -15,6 +15,10 @@ struct SettingsView: View {
     // поэтому галочка у выбранной темы обновляется сразу.
     private var theme: ThemeManager { ThemeManager.shared }
 
+    // Адрес и токен нашего сервера-прокси к Claude (для AI-генерации рецептов).
+    @AppStorage("assistantServerURL") private var serverURL = ""
+    @AppStorage("assistantServerToken") private var serverToken = ""
+
     var body: some View {
         Form {
             Section("Имя") {
@@ -30,6 +34,20 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+
+            Section {
+                TextField("https://ваш-сервер", text: $serverURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                TextField("Токен (если задан на сервере)", text: $serverToken)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("AI-помощник (сервер)")
+            } footer: {
+                Text("Адрес вашего сервера-прокси к Claude. Пока не заполнено — помощник работает офлайн (подбор из ваших рецептов). Инструкция по серверу — в папке server/ проекта.")
             }
 
             Section("О приложении") {
