@@ -27,9 +27,11 @@ process.on("uncaughtException", (err) => console.error("uncaughtException:", err
 const app = express();
 app.use(express.json());
 
-const apiKey = process.env.ANTHROPIC_API_KEY;
-const model = process.env.CLAUDE_MODEL || "claude-opus-4-8";
-const appToken = process.env.APP_SHARED_TOKEN || null;
+// .trim() убирает случайные пробелы/переносы строки по краям — частая причина
+// «invalid x-api-key» при копировании ключа в панель хостинга.
+const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+const model = (process.env.CLAUDE_MODEL || "claude-opus-4-8").trim();
+const appToken = process.env.APP_SHARED_TOKEN?.trim() || null;
 
 // Проверяем ключ на типичные ошибки (пустой, с примером-placeholder'ом, не тот формат).
 function keyProblem(key) {
