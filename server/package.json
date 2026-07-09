@@ -1,0 +1,14 @@
+{
+  "name": "foodstory-server",
+  "version": "1.0.0",
+  "description": "Прокси-сервер FoodStory к Claude (ключ хранится на сервере)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "express": "^5.2.1"
+  }
+}

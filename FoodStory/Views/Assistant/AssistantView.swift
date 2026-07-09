@@ -2,25 +2,41 @@
 //  AssistantView.swift
 //  FoodStory
 //
-//  Экран AI-помощника: вводим продукты и пожелание — получаем идею рецепта.
-//  Сейчас работает демо-режим (StubRecipeSuggester, без интернета). Когда будет
-//  готов ключ, здесь достаточно заменить одну строку на ClaudeRecipeSuggester.
+//  AI-помощник (рабочий, офлайн). Вводим продукты и пожелание — получаем
+//  подборку из СВОИХ рецептов, отсортированную по совпадению продуктов, вкусу
+//  и пожеланиям. Подбор делает LocalRecipeAssistant, без интернета и ключей.
 //
 
 import SwiftUI
+import SwiftData
 
 struct AssistantView: View {
     @Environment(\.dismiss) private var dismiss
 
-    // Какой «поставщик идей» используем. Пока — заглушка.
-    // Позже: let suggester: RecipeSuggesting = ClaudeRecipeSuggester(apiKey: "...")
-    private let suggester: RecipeSuggesting = StubRecipeSuggester()
+    // Все рецепты и модель вкуса — из них помощник строит подсказки.
+    @Query private var recipes: [Recipe]
+    @Environment(TasteModel.self) private var taste
 
     @State private var products = ""
     @State private var note = ""
-    @State private var answer = ""
-    @State private var isLoading = false
-    @State private var errorText: String?
+    @State private var suggestions: [AssistantSuggestion] = []
+    @State private var didSearch = false
+
+    // Настройки сервера-прокси к Claude (для генерации новых рецептов).
+    @AppStorage("assistantServerURL") private var serverURL = ""
+    @AppStorage("assistantServerToken") private var serverToken = ""
+
+    // Состояние AI-генерации.
+    @State private var aiText: String?
+    @State private var aiError: String?
+    @State private var aiLoading = false
+
+    // Продукты строкой → список.
+    private var productsList: [String] {
+        products.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,26 +45,20 @@ struct AssistantView: View {
 
                     infoBanner
 
-                    // Поле продуктов.
                     field(title: "Какие продукты есть?",
                           prompt: "Например: яйца, помидоры, сыр",
                           text: $products)
 
-                    // Поле пожелания.
                     field(title: "Пожелание (необязательно)",
                           prompt: "Например: быстро, без мяса, на завтрак",
                           text: $note)
 
                     askButton
+                    aiButton
+                    aiResult
 
-                    if let errorText {
-                        Text(errorText)
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.tomato)
-                    }
-
-                    if !answer.isEmpty {
-                        answerCard
+                    if didSearch {
+                        resultsSection
                     }
                 }
                 .padding(Metric.padding)
@@ -69,7 +79,7 @@ struct AssistantView: View {
         HStack(alignment: .top, spacing: Metric.spacing) {
             Image(systemName: "sparkles")
                 .foregroundStyle(Theme.accent)
-            Text("Демо-режим. Позже подключим Claude AI — и подсказки станут настоящими.")
+            Text("Подбираю из ваших рецептов по продуктам и вкусу. Чем больше рецептов — тем точнее подсказки.")
                 .font(.caption)
                 .foregroundStyle(Theme.textSecondary)
         }
@@ -93,60 +103,156 @@ struct AssistantView: View {
 
     private var askButton: some View {
         Button {
-            Task { await ask() }
+            search()
+        } label: {
+            Label("Предложить рецепт", systemImage: "wand.and.stars")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Theme.accent)
+                .clipShape(RoundedRectangle(cornerRadius: Metric.cornerRadius, style: .continuous))
+        }
+    }
+
+    // Кнопка генерации нового рецепта через сервер (Claude).
+    private var aiButton: some View {
+        Button {
+            Task { await generateWithAI() }
         } label: {
             HStack {
-                if isLoading {
+                if aiLoading {
                     ProgressView().tint(.white)
                 } else {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "wand.and.stars.inverse")
                 }
-                Text(isLoading ? "Придумываю…" : "Предложить рецепт")
+                Text(aiLoading ? "Придумываю…" : "Придумать новый рецепт (AI)")
             }
             .font(.headline)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .padding()
-            .background(Theme.accent)
+            .background(Theme.green)
             .clipShape(RoundedRectangle(cornerRadius: Metric.cornerRadius, style: .continuous))
         }
-        .disabled(isLoading)
+        .disabled(aiLoading)
     }
 
-    private var answerCard: some View {
-        VStack(alignment: .leading, spacing: Metric.spacing) {
-            Label("Идея", systemImage: "lightbulb")
-                .font(.headline)
-                .foregroundStyle(Theme.accent)
-            Text(answer)
-                .foregroundStyle(Theme.textPrimary)
+    @ViewBuilder
+    private var aiResult: some View {
+        if let aiError {
+            Text(aiError)
+                .font(.subheadline)
+                .foregroundStyle(Theme.tomato)
         }
-        .padding(Metric.padding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle()
+        if let aiText {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Новый рецепт от AI", systemImage: "sparkles")
+                    .font(.headline)
+                    .foregroundStyle(Theme.green)
+                Text(aiText)
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            .padding(Metric.padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
     }
 
-    // Запрашиваем идею у «поставщика».
-    private func ask() async {
-        errorText = nil
-        answer = ""
-        isLoading = true
-        defer { isLoading = false }
+    @ViewBuilder
+    private var resultsSection: some View {
+        if suggestions.isEmpty {
+            Text("Ничего не нашлось. Попробуйте другие продукты или добавьте рецепты.")
+                .font(.subheadline)
+                .foregroundStyle(Theme.textSecondary)
+        } else {
+            VStack(spacing: Metric.spacing) {
+                ForEach(suggestions) { suggestion in
+                    suggestionCard(suggestion)
+                }
+            }
+        }
+    }
 
-        // Разбиваем строку продуктов по запятым в список.
-        let list = products
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+    @ViewBuilder
+    private func suggestionCard(_ suggestion: AssistantSuggestion) -> some View {
+        if let recipe = suggestion.recipe {
+            // Подобран конкретный рецепт — карточка ведёт в него.
+            NavigationLink {
+                RecipeDetailView(recipe: recipe)
+            } label: {
+                HStack(spacing: Metric.spacing) {
+                    RecipeImageView(recipe: recipe, iconSize: 22)
+                        .frame(width: 56, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: Metric.smallRadius))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(suggestion.title)
+                            .font(.headline)
+                            .foregroundStyle(Theme.textPrimary)
+                        Text(suggestion.reason)
+                            .font(.caption)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                .padding(Metric.padding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .cardStyle()
+            }
+            .buttonStyle(.plain)
+        } else {
+            // Общий совет (когда нет подходящих рецептов).
+            VStack(alignment: .leading, spacing: 6) {
+                Label(suggestion.title, systemImage: "lightbulb")
+                    .font(.headline)
+                    .foregroundStyle(Theme.accent)
+                Text(suggestion.reason)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            .padding(Metric.padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .cardStyle()
+        }
+    }
 
+    private func search() {
+        suggestions = LocalRecipeAssistant.suggest(
+            products: productsList, note: note, recipes: recipes, taste: taste
+        )
+        didSearch = true
+    }
+
+    // Генерация нового рецепта через наш сервер (если он настроен).
+    private func generateWithAI() async {
+        aiError = nil
+        aiText = nil
+
+        let trimmed = serverURL.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme != nil else {
+            aiError = "Сначала укажите адрес сервера в Настройках → AI-помощник."
+            return
+        }
+
+        aiLoading = true
+        defer { aiLoading = false }
+
+        let suggester = ServerRecipeSuggester(
+            baseURL: url,
+            appToken: serverToken.isEmpty ? nil : serverToken
+        )
         do {
-            answer = try await suggester.suggestRecipe(fromProducts: list, note: note)
+            aiText = try await suggester.suggestRecipe(fromProducts: productsList, note: note)
         } catch {
-            errorText = error.localizedDescription
+            aiError = error.localizedDescription
         }
     }
 }
 
 #Preview {
     AssistantView()
+        .modelContainer(previewContainer)
+        .environment(TasteModel())
 }
