@@ -16,6 +16,7 @@ struct AssistantView: View {
     // Все рецепты и модель вкуса — из них помощник строит подсказки.
     @Query private var recipes: [Recipe]
     @Environment(TasteModel.self) private var taste
+    @Environment(\.modelContext) private var context
 
     @State private var products = ""
     @State private var note = ""
@@ -30,6 +31,8 @@ struct AssistantView: View {
     @State private var aiText: String?
     @State private var aiError: String?
     @State private var aiLoading = false
+    // Рецепт, сохранённый из ответа AI (чтобы показать «Открыть»).
+    @State private var savedRecipe: Recipe?
 
     // Продукты строкой → список.
     private var productsList: [String] {
@@ -146,12 +149,31 @@ struct AssistantView: View {
                 .foregroundStyle(Theme.tomato)
         }
         if let aiText {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Metric.spacing) {
                 Label("Новый рецепт от AI", systemImage: "sparkles")
                     .font(.headline)
                     .foregroundStyle(Theme.green)
                 Text(aiText)
                     .foregroundStyle(Theme.textPrimary)
+
+                // Сохранить рецепт к себе (или открыть, если уже сохранён).
+                if let saved = savedRecipe {
+                    NavigationLink {
+                        RecipeDetailView(recipe: saved)
+                    } label: {
+                        Label("Открыть добавленный рецепт", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Theme.green)
+                    }
+                } else {
+                    Button {
+                        saveAIRecipe(aiText)
+                    } label: {
+                        Label("Добавить в мои рецепты", systemImage: "plus.circle.fill")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(Theme.accent)
+                    }
+                }
             }
             .padding(Metric.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -226,9 +248,18 @@ struct AssistantView: View {
     }
 
     // Генерация нового рецепта через наш сервер (если он настроен).
+    // Разбираем ответ AI в рецепт и сохраняем в базу.
+    private func saveAIRecipe(_ text: String) {
+        let recipe = AIRecipeParser.recipe(from: text)
+        context.insert(recipe)
+        try? context.save()
+        savedRecipe = recipe
+    }
+
     private func generateWithAI() async {
         aiError = nil
         aiText = nil
+        savedRecipe = nil
 
         let trimmed = serverURL.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, let url = URL(string: trimmed), url.scheme != nil else {

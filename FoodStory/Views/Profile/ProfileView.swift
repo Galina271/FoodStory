@@ -86,10 +86,13 @@ struct ProfileView: View {
             }
             .background(Theme.background)
             .navigationTitle("Профиль")
-            // Окно «Поделиться» с готовым PDF-файлом.
+            // Просмотр готовой книги прямо в приложении. У просмотрщика есть своя
+            // кнопка «Поделиться» — через неё файл сохраняется на устройство
+            // («Сохранить в Файлы»), отправляется или печатается.
             .sheet(isPresented: $showingShare) {
                 if let pdfURL {
-                    ShareSheet(items: [pdfURL])
+                    PDFPreviewView(url: pdfURL)
+                        .ignoresSafeArea()
                 }
             }
         }

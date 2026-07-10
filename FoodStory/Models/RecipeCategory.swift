@@ -44,12 +44,12 @@ enum RecipeCategory: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .breakfast: return "sunrise.fill"
-        case .soup:      return "bowl.fill"
+        case .soup:      return "cup.and.saucer.fill"
         case .main:      return "fork.knife"
         case .salad:     return "leaf.fill"
         case .dessert:   return "birthday.cake.fill"
         case .baking:    return "oven.fill"
-        case .drink:     return "cup.and.saucer.fill"
+        case .drink:     return "wineglass.fill"
         case .other:     return "fork.knife"
         }
     }

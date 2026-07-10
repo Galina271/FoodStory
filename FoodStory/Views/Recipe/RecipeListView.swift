@@ -32,6 +32,9 @@ struct RecipeListView: View {
     // пока показываем подтверждение, чтобы не удалить случайно.
     @State private var recipeToDelete: Recipe?
 
+    // Выбранная категория для фильтра (nil = показывать все).
+    @State private var selectedCategory: RecipeCategory?
+
     // Варианты сортировки из твоего плана: по дате, популярности, времени, алфавиту.
     enum SortOption: String, CaseIterable, Identifiable {
         case date = "По дате"
@@ -51,6 +54,19 @@ struct RecipeListView: View {
         }
     }
 
+    // Категории, в которых есть хотя бы один рецепт (в порядке из enum).
+    private var usedCategories: [RecipeCategory] {
+        RecipeCategory.allCases.filter { category in
+            recipes.contains { $0.category == category }
+        }
+    }
+
+    // Рецепты после сортировки и фильтра по категории.
+    private var filteredRecipes: [Recipe] {
+        guard let selectedCategory else { return sortedRecipes }
+        return sortedRecipes.filter { $0.category == selectedCategory }
+    }
+
     // Сетка из двух колонок.
     private let columns = [
         GridItem(.flexible(), spacing: Metric.spacing),
@@ -65,24 +81,35 @@ struct RecipeListView: View {
                 if recipes.isEmpty {
                     emptyState
                 } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: Metric.spacing) {
-                            ForEach(sortedRecipes) { recipe in
-                                // NavigationLink делает карточку «кликабельной» —
-                                // при нажатии откроется детальный экран.
-                                NavigationLink {
-                                    RecipeDetailView(recipe: recipe)
-                                } label: {
-                                    RecipeCardView(recipe: recipe)
+                    VStack(spacing: 0) {
+                        categoryFilterBar
+
+                        ScrollView {
+                            if filteredRecipes.isEmpty {
+                                Text("В этой категории пока нет рецептов.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .padding(.top, 40)
+                            } else {
+                                LazyVGrid(columns: columns, spacing: Metric.spacing) {
+                                    ForEach(filteredRecipes) { recipe in
+                                        // NavigationLink делает карточку «кликабельной» —
+                                        // при нажатии откроется детальный экран.
+                                        NavigationLink {
+                                            RecipeDetailView(recipe: recipe)
+                                        } label: {
+                                            RecipeCardView(recipe: recipe)
+                                        }
+                                        .buttonStyle(.plain)   // убираем синий цвет ссылки
+                                        // Долгое нажатие на карточку открывает меню действий.
+                                        .contextMenu {
+                                            recipeMenu(for: recipe)
+                                        }
+                                    }
                                 }
-                                .buttonStyle(.plain)   // убираем синий цвет ссылки
-                                // Долгое нажатие на карточку открывает меню действий.
-                                .contextMenu {
-                                    recipeMenu(for: recipe)
-                                }
+                                .padding(Metric.padding)
                             }
                         }
-                        .padding(Metric.padding)
                     }
                 }
             }
@@ -178,6 +205,41 @@ struct RecipeListView: View {
         recipe.isFavorite.toggle()
         try? context.save()
         taste.train(on: recipe, liked: recipe.isFavorite)
+    }
+
+    // Лента «чипсов» категорий: «Все» + категории, в которых есть рецепты.
+    private var categoryFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                categoryChip(title: "Все", icon: "square.grid.2x2",
+                             selected: selectedCategory == nil) {
+                    selectedCategory = nil
+                }
+                ForEach(usedCategories) { category in
+                    categoryChip(title: category.title, icon: category.icon,
+                                 selected: selectedCategory == category) {
+                        selectedCategory = category
+                    }
+                }
+            }
+            .padding(.horizontal, Metric.padding)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func categoryChip(title: String, icon: String, selected: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { action() }
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(selected ? .bold : .regular))
+                .foregroundStyle(selected ? .white : Theme.textPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(selected ? Theme.accent : Theme.chip, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     // Что показываем, когда рецептов нет вообще.
