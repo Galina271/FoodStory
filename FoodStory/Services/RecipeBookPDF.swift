@@ -99,9 +99,42 @@ private final class PDFDrawer {
 
     func drawCover(title: String, subtitle: String) {
         startPage()
-        y = pageSize.height * 0.38
-        drawText(title, font: .systemFont(ofSize: 34, weight: .bold), color: ink, spacingAfter: 10)
-        drawText(subtitle, font: .systemFont(ofSize: 16, weight: .regular), color: inkSoft)
+
+        // Цветная шапка во всю ширину страницы.
+        let bandHeight: CGFloat = 320
+        accent.setFill()
+        UIBezierPath(rect: CGRect(x: 0, y: 0, width: pageSize.width, height: bandHeight)).fill()
+
+        // Эмблема: полупрозрачный круг + белые вилка/нож по центру шапки.
+        let emblem: CGFloat = 128
+        let emblemRect = CGRect(x: (pageSize.width - emblem) / 2, y: 80, width: emblem, height: emblem)
+        UIColor.white.withAlphaComponent(0.20).setFill()
+        UIBezierPath(ovalIn: emblemRect).fill()
+        if let symbol = UIImage(systemName: "fork.knife")?
+            .withConfiguration(UIImage.SymbolConfiguration(pointSize: 60, weight: .semibold))
+            .withTintColor(.white, renderingMode: .alwaysOriginal) {
+            let s = symbol.size
+            symbol.draw(in: CGRect(x: emblemRect.midX - s.width / 2,
+                                   y: emblemRect.midY - s.height / 2,
+                                   width: s.width, height: s.height))
+        }
+
+        // Название бренда под эмблемой.
+        drawCenteredString("FoodStory", font: .systemFont(ofSize: 24, weight: .bold),
+                           color: .white, atY: emblemRect.maxY + 18)
+
+        // Заголовок и подзаголовок книги — по центру под шапкой.
+        y = bandHeight + 90
+        drawCentered(title, font: .systemFont(ofSize: 40, weight: .bold), color: ink, spacingAfter: 14)
+        drawCentered(subtitle, font: .systemFont(ofSize: 17, weight: .regular), color: inkSoft, spacingAfter: 0)
+
+        // Дата внизу страницы.
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.locale = Locale(identifier: "ru_RU")
+        drawCenteredString(formatter.string(from: Date()),
+                           font: .systemFont(ofSize: 12, weight: .regular),
+                           color: inkSoft, atY: pageSize.height - margin - 16)
     }
 
     // MARK: Один рецепт
@@ -158,6 +191,31 @@ private final class PDFDrawer {
     }
 
     private func space(_ height: CGFloat) { y += height }
+
+    // Рисует текст по центру страницы от текущего `y` и сдвигает курсор вниз.
+    private func drawCentered(_ string: String, font: UIFont, color: UIColor, spacingAfter: CGFloat) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: color, .paragraphStyle: paragraph
+        ]
+        let attributed = NSAttributedString(string: string, attributes: attributes)
+        let box = CGSize(width: contentWidth, height: .greatestFiniteMagnitude)
+        let height = ceil(attributed.boundingRect(with: box,
+                                                  options: [.usesLineFragmentOrigin, .usesFontLeading],
+                                                  context: nil).height)
+        attributed.draw(with: CGRect(x: margin, y: y, width: contentWidth, height: height),
+                        options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        y += height + spacingAfter
+    }
+
+    // Рисует одну строку по центру страницы на заданной высоте (курсор не трогает).
+    private func drawCenteredString(_ string: String, font: UIFont, color: UIColor, atY: CGFloat) {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let size = (string as NSString).size(withAttributes: attributes)
+        (string as NSString).draw(at: CGPoint(x: (pageSize.width - size.width) / 2, y: atY),
+                                  withAttributes: attributes)
+    }
 
     // Рисует фото рецепта или цветную заглушку категории.
     private func drawPhoto(_ recipe: Recipe) {

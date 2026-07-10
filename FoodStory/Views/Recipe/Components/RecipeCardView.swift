@@ -14,9 +14,9 @@ struct RecipeCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
 
-            // Фото рецепта (или красивая заглушка по категории) — единый компонент.
-            RecipeImageView(recipe: recipe, iconSize: 40)
-                .frame(height: 130)
+            // Фото рецепта (или красивая заглушка по категории) с бейджем категории.
+            RecipeImageView(recipe: recipe, iconSize: 42, showsCategoryBadge: true)
+                .frame(height: 150)
                 // Сердечко избранного в углу, если рецепт отмечен.
                 .overlay(alignment: .topTrailing) {
                     if recipe.isFavorite {
@@ -24,25 +24,25 @@ struct RecipeCardView: View {
                             .font(.subheadline)
                             .foregroundStyle(.white)
                             .padding(8)
-                            .background(.black.opacity(0.3), in: Circle())
+                            .background(.black.opacity(0.35), in: Circle())
                             .padding(8)
                     }
                 }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(recipe.title)
                     .font(.headline)
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
 
-                // Метаданные: время + сложность.
+                // Метаданные: время + сложность (с иконкой).
                 HStack(spacing: 12) {
                     Label(recipe.cookingTimeText, systemImage: "clock")
+                        .foregroundStyle(Theme.textSecondary)
                     Label(recipe.difficulty.title, systemImage: recipe.difficulty.icon)
                         .foregroundStyle(recipe.difficulty.color)
                 }
                 .font(.caption)
-                .foregroundStyle(Theme.textSecondary)
             }
             .padding(Metric.padding)
         }

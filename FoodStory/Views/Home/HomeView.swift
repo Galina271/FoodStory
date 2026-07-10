@@ -22,10 +22,17 @@ struct HomeView: View {
     @State private var showingShoppingList = false
     @State private var showingAssistant = false
 
-    // Рекомендации: если модель вкуса уже чему-то научилась — показываем её
-    // персональный топ; пока не обучена — просто 3 случайных рецепта.
-    private var suggestions: [Recipe] {
-        taste.isTrained
+    // Последняя реакция на рекомендацию: true = 👍, false = 👎.
+    // Нужна, чтобы наглядно показать, что оценка засчитана.
+    @State private var reactions: [PersistentIdentifier: Bool] = [:]
+
+    // Зафиксированная подборка рекомендаций. Считаем её ОДИН раз (при появлении
+    // экрана и при изменении числа рецептов), а не на каждый тап — иначе оценка
+    // дообучает модель, порядок пересчитывается и карточки «скачут».
+    @State private var displayedSuggestions: [Recipe] = []
+
+    private func refreshSuggestions() {
+        displayedSuggestions = taste.isTrained
             ? taste.recommendations(from: recipes, limit: 3)
             : Array(recipes.shuffled().prefix(3))
     }
@@ -38,31 +45,49 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
+                // Отступы задаём поэлементно, а горизонтальные ленты пускаем во всю
+                // ширину (с внутренними полями) — тогда карточки уходят за край
+                // аккуратно, без «обрезков-полосок» посреди экрана.
                 VStack(alignment: .leading, spacing: Metric.padding * 1.5) {
 
                     greeting
+                        .padding(.horizontal, Metric.padding)
 
-                    sectionTitle("Что приготовить сегодня?")
-                    if taste.isTrained {
-                        Label("Подобрано под ваш вкус · обучено на \(taste.trainedCount) примерах",
-                              systemImage: "sparkles")
-                            .font(.caption)
-                            .foregroundStyle(Theme.accent)
+                    VStack(alignment: .leading, spacing: 6) {
+                        sectionTitle("Что приготовить сегодня?")
+                        if taste.isTrained {
+                            Label("Подобрано под ваш вкус · обучено на \(taste.trainedCount) примерах",
+                                  systemImage: "sparkles")
+                                .font(.caption)
+                                .foregroundStyle(Theme.accent)
+                        }
                     }
+                    .padding(.horizontal, Metric.padding)
+
                     suggestionsRow
 
                     if !recentlyCooked.isEmpty {
                         sectionTitle("Недавно готовили")
+                            .padding(.horizontal, Metric.padding)
                         recentRow
                     }
 
                     sectionTitle("Быстрые действия")
+                        .padding(.horizontal, Metric.padding)
                     quickActions
+                        .padding(.horizontal, Metric.padding)
                 }
-                .padding(Metric.padding)
+                .padding(.vertical, Metric.padding)
             }
             .background(Theme.background)
+            .onAppear {
+                if displayedSuggestions.isEmpty { refreshSuggestions() }
+            }
+            .onChange(of: recipes.count) { _, _ in
+                refreshSuggestions()
+            }
             .navigationTitle("FoodStory")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingAddRecipe) {
                 AddRecipeView()
             }
@@ -78,12 +103,25 @@ struct HomeView: View {
 
     private var greeting: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Привет, \(userName)!")
+            Text("Привет, \(userName)! 👋")
                 .font(.largeTitle.bold())
                 .foregroundStyle(Theme.textPrimary)
-            Text("Что приготовим сегодня?")
+            Text(recipes.isEmpty
+                 ? "Начнём вашу кулинарную книгу"
+                 : "\(recipes.count) \(recipeWord(recipes.count)) в вашей книге")
                 .font(.subheadline)
                 .foregroundStyle(Theme.textSecondary)
+        }
+    }
+
+    // Правильное слово: 1 рецепт, 2 рецепта, 5 рецептов.
+    private func recipeWord(_ n: Int) -> String {
+        let mod100 = n % 100, mod10 = n % 10
+        if mod100 >= 11 && mod100 <= 14 { return "рецептов" }
+        switch mod10 {
+        case 1: return "рецепт"
+        case 2, 3, 4: return "рецепта"
+        default: return "рецептов"
         }
     }
 
@@ -98,7 +136,7 @@ struct HomeView: View {
     private var suggestionsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: Metric.spacing) {
-                ForEach(suggestions) { recipe in
+                ForEach(displayedSuggestions) { recipe in
                     VStack(spacing: 8) {
                         NavigationLink {
                             RecipeDetailView(recipe: recipe)
@@ -113,34 +151,52 @@ struct HomeView: View {
                 }
             }
         }
+        // Поля по краям — карточки уходят за экран аккуратно, без «обрезков».
+        .contentMargins(.horizontal, Metric.padding, for: .scrollContent)
     }
 
     // Пара кнопок оценки. Каждый тап — это один пример для обучения модели.
     private func ratingButtons(for recipe: Recipe) -> some View {
-        HStack(spacing: 8) {
-            ratingButton(icon: "hand.thumbsup", color: Theme.green) {
-                taste.train(on: recipe, liked: true)
+        let reaction = reactions[recipe.id]
+        return HStack(spacing: 8) {
+            ratingButton(icon: "hand.thumbsup", color: Theme.green,
+                         active: reaction == true) {
+                react(to: recipe, liked: true)
             }
-            ratingButton(icon: "hand.thumbsdown", color: Theme.tomato) {
-                taste.train(on: recipe, liked: false)
+            ratingButton(icon: "hand.thumbsdown", color: Theme.tomato,
+                         active: reaction == false) {
+                react(to: recipe, liked: false)
             }
         }
     }
 
-    private func ratingButton(icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            // Лёгкая вибрация-отклик, что оценка засчитана.
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            action()
-        } label: {
-            Image(systemName: icon)
-                .font(.subheadline)
-                .foregroundStyle(color)
+    // Обрабатываем оценку: вибрация, подсветка, обучение модели.
+    // Повторное нажатие на ту же кнопку — отмена (подсветка снимается).
+    private func react(to recipe: Recipe, liked: Bool) {
+        #if os(iOS)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+        if reactions[recipe.id] == liked {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                reactions[recipe.id] = nil
+            }
+        } else {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                reactions[recipe.id] = liked
+            }
+            taste.train(on: recipe, liked: liked)
+        }
+    }
+
+    private func ratingButton(icon: String, color: Color, active: Bool,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: active ? "\(icon).fill" : icon)
+                .font(.subheadline.bold())
+                .foregroundStyle(active ? .white : color)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
-                .background(Theme.chip)
+                .padding(.vertical, 9)
+                .background(active ? color : Theme.chip)
                 .clipShape(RoundedRectangle(cornerRadius: Metric.smallRadius))
         }
         .buttonStyle(.plain)
@@ -160,31 +216,36 @@ struct HomeView: View {
                 }
             }
         }
+        .contentMargins(.horizontal, Metric.padding, for: .scrollContent)
     }
 
     // Кнопки быстрых действий.
     private var quickActions: some View {
         HStack(spacing: Metric.spacing) {
-            quickActionButton(title: "Новый рецепт", icon: "plus") {
+            quickActionButton(title: "Новый рецепт", icon: "plus", color: Theme.accent) {
                 showingAddRecipe = true
             }
-            quickActionButton(title: "Список покупок", icon: "cart") {
+            quickActionButton(title: "Список покупок", icon: "cart.fill", color: Theme.green) {
                 showingShoppingList = true
             }
-            quickActionButton(title: "Помощник", icon: "sparkles") {
+            quickActionButton(title: "Помощник", icon: "sparkles", color: Theme.tomato) {
                 showingAssistant = true
             }
         }
     }
 
-    private func quickActionButton(title: String, icon: String, action: @escaping () -> Void) -> some View {
+    private func quickActionButton(title: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundStyle(Theme.accent)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .frame(width: 46, height: 46)
+                    .background(color.opacity(0.15), in: Circle())
                 Text(title)
-                    .font(.subheadline)
+                    .font(.caption.bold())
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2, reservesSpace: true)   // всегда 2 строки — карточки одной высоты
                     .foregroundStyle(Theme.textPrimary)
             }
             .frame(maxWidth: .infinity)
