@@ -56,6 +56,7 @@ struct FridgeView: View {
                 }
                 .padding(Metric.padding)
             }
+            .keyboardDoneButton()
             .navigationTitle("Холодильник")
         }
         .tint(Theme.accent)

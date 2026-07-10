@@ -67,6 +67,8 @@ struct AssistantView: View {
                 .padding(Metric.padding)
             }
             .background(Theme.background)
+            .scrollDismissesKeyboard(.interactively)
+            .keyboardDoneButton()
             .navigationTitle("Помощник")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

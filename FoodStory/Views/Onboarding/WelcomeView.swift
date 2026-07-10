@@ -82,6 +82,8 @@ struct WelcomeView: View {
             .padding(Metric.padding)
         }
         .background(Theme.background)
+        .scrollDismissesKeyboard(.interactively)
+        .keyboardDoneButton()
         .onAppear { name = userName }
     }
 

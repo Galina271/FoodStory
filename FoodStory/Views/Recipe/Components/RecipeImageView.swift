@@ -24,25 +24,31 @@ struct RecipeImageView: View {
     var showsCategoryBadge: Bool = false
 
     var body: some View {
-        ZStack {
-            // Пытаемся достать фото пользователя из сохранённых байтов.
-            if let data = recipe.imageData, let uiImage = UIImage(data: data) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()   // заполняем всю область, лишнее обрезается
-            } else {
-                placeholder
+        // Color.clear занимает ровно тот размер, что задаёт .frame снаружи
+        // (например, height: 150), и НЕ растягивается под фото. Само фото рисуем
+        // поверх через .overlay — оверлей не влияет на размер контейнера, поэтому
+        // картинка не может «распереть» карточку и наехать на соседнюю.
+        Color.clear
+            .overlay {
+                // Пытаемся достать фото пользователя из сохранённых байтов.
+                if let data = recipe.imageData, let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()   // заполняем всю область, лишнее обрезается
+                } else {
+                    placeholder
+                }
             }
-        }
-        // clipped() обрезает всё, что вылезло за рамку (важно для scaledToFill).
-        .clipped()
-        // Бейдж категории поверх — по желанию.
-        .overlay(alignment: .topLeading) {
-            if showsCategoryBadge {
-                categoryBadge
-                    .padding(Metric.spacing)
+            // clipped() обрезает всё, что вылезло за рамку (важно для scaledToFill).
+            .clipped()
+            // Бейдж категории поверх — он привязан к неподвижной рамке Color.clear,
+            // поэтому всегда остаётся в левом верхнем углу, даже когда есть фото.
+            .overlay(alignment: .topLeading) {
+                if showsCategoryBadge {
+                    categoryBadge
+                        .padding(Metric.spacing)
+                }
             }
-        }
     }
 
     // Заглушка: диагональный градиент категории + её иконка по центру.

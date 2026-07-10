@@ -55,6 +55,8 @@ struct SettingsView: View {
                 LabeledContent("Сделано с любовью", value: "❤️")
             }
         }
+        .scrollDismissesKeyboard(.interactively)
+        .keyboardDoneButton()
         .navigationTitle("Настройки")
         .navigationBarTitleDisplayMode(.inline)
     }

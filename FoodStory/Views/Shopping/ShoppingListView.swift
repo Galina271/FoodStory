@@ -47,6 +47,7 @@ struct ShoppingListView: View {
                     }
                 }
             }
+            .keyboardDoneButton()
             .navigationTitle("Список покупок")
             .toolbar {
                 if !items.isEmpty {

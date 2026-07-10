@@ -39,6 +39,8 @@ struct AddStepSheet: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
+            .keyboardDoneButton()
             .navigationTitle("Шаг")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

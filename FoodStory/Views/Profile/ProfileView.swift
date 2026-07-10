@@ -15,9 +15,10 @@ struct ProfileView: View {
     // Имя из настроек (то же, что в приветствии на главной).
     @AppStorage("userName") private var userName = "Галина"
 
-    // Готовая PDF-книга и флаг показа окна «Поделиться».
-    @State private var pdfURL: URL?
-    @State private var showingShare = false
+    // Готовая PDF-книга. Как только сюда попадает ссылка на файл — открывается
+    // просмотр (через .sheet(item:)). Это надёжнее двух отдельных флагов:
+    // лист откроется ровно тогда, когда файл действительно готов.
+    @State private var book: PDFBook?
 
     private var totalCooked: Int {
         recipes.reduce(0) { $0 + $1.cookedCount }
@@ -86,14 +87,11 @@ struct ProfileView: View {
             }
             .background(Theme.background)
             .navigationTitle("Профиль")
-            // Просмотр готовой книги прямо в приложении. У просмотрщика есть своя
-            // кнопка «Поделиться» — через неё файл сохраняется на устройство
-            // («Сохранить в Файлы»), отправляется или печатается.
-            .sheet(isPresented: $showingShare) {
-                if let pdfURL {
-                    PDFPreviewView(url: pdfURL)
-                        .ignoresSafeArea()
-                }
+            // Просмотр готовой книги прямо в приложении (PDFKit) с кнопками
+            // «Готово» и «Сохранить» — файл открывается быстро и сохраняется
+            // на устройство через «Сохранить в Файлы».
+            .sheet(item: $book) { book in
+                PDFBookView(url: book.url)
             }
         }
         .tint(Theme.accent)
@@ -128,10 +126,12 @@ struct ProfileView: View {
         .contentShape(Rectangle())   // вся строка кликабельна, не только текст
     }
 
-    // Собирает PDF-книгу и открывает окно «Поделиться».
+    // Собирает PDF-книгу и открывает её просмотр. Если ссылка получена —
+    // присваиваем book, и .sheet(item:) сам покажет просмотрщик.
     private func exportPDF() {
-        pdfURL = RecipeBookPDF.makeURL(recipes: recipes, author: userName)
-        showingShare = pdfURL != nil
+        if let url = RecipeBookPDF.makeURL(recipes: recipes, author: userName) {
+            book = PDFBook(url: url)
+        }
     }
 }
 

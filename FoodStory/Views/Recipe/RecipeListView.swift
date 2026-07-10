@@ -67,10 +67,11 @@ struct RecipeListView: View {
         return sortedRecipes.filter { $0.category == selectedCategory }
     }
 
-    // Сетка из двух колонок.
+    // Сетка из двух колонок. Расстояние между колонками — побольше, чтобы
+    // карточки заметно отделялись друг от друга.
     private let columns = [
-        GridItem(.flexible(), spacing: Metric.spacing),
-        GridItem(.flexible(), spacing: Metric.spacing)
+        GridItem(.flexible(), spacing: Metric.padding),
+        GridItem(.flexible(), spacing: Metric.padding)
     ]
 
     var body: some View {
@@ -91,7 +92,7 @@ struct RecipeListView: View {
                                     .foregroundStyle(Theme.textSecondary)
                                     .padding(.top, 40)
                             } else {
-                                LazyVGrid(columns: columns, spacing: Metric.spacing) {
+                                LazyVGrid(columns: columns, spacing: Metric.padding + 6) {
                                     ForEach(filteredRecipes) { recipe in
                                         // NavigationLink делает карточку «кликабельной» —
                                         // при нажатии откроется детальный экран.

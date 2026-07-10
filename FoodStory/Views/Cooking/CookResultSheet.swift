@@ -70,6 +70,8 @@ struct CookResultSheet: View {
                 .padding(Metric.padding)
             }
             .background(Theme.background)
+            .scrollDismissesKeyboard(.interactively)
+            .keyboardDoneButton()
             .navigationTitle(recipe.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

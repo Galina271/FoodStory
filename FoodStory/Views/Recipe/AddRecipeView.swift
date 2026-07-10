@@ -45,6 +45,9 @@ struct AddRecipeView: View {
     @State private var showingIngredientSheet = false
     @State private var showingStepSheet = false
 
+    // Ингредиент, который сейчас редактируем (nil — правка закрыта).
+    @State private var editingIngredient: IngredientDraft?
+
     /// init подготавливает начальное состояние формы.
     /// `_title = State(initialValue:)` — так задают стартовое значение для @State
     /// прямо в инициализаторе.
@@ -108,15 +111,25 @@ struct AddRecipeView: View {
                     Stepper("Порций: \(servings)", value: $servings, in: 1...20)
                 }
 
-                // 2. Ингредиенты
+                // 2. Ингредиенты — по тапу на строку открывается правка.
                 Section("Ингредиенты") {
                     ForEach(ingredientDrafts) { draft in
-                        HStack {
-                            Text(draft.name)
-                            Spacer()
-                            Text(displayDraft(draft))
-                                .foregroundStyle(Theme.textSecondary)
+                        Button {
+                            editingIngredient = draft
+                        } label: {
+                            HStack {
+                                Text(draft.name)
+                                    .foregroundStyle(Theme.textPrimary)
+                                Spacer()
+                                Text(displayDraft(draft))
+                                    .foregroundStyle(Theme.textSecondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                     }
                     .onDelete { offsets in
                         ingredientDrafts.remove(atOffsets: offsets)
@@ -129,15 +142,17 @@ struct AddRecipeView: View {
                     }
                 }
 
-                // 3. Шаги
+                // 3. Шаги — текст каждого шага редактируется прямо в строке.
                 Section("Шаги приготовления") {
-                    ForEach(stepDrafts) { draft in
-                        HStack(alignment: .top) {
+                    ForEach($stepDrafts) { $draft in
+                        HStack(alignment: .top, spacing: 8) {
                             if let index = stepDrafts.firstIndex(where: { $0.id == draft.id }) {
                                 Text("\(index + 1).")
                                     .foregroundStyle(Theme.accent)
                             }
-                            Text(draft.text)
+                            // Редактируемое многострочное поле — можно менять текст шага.
+                            TextField("Что нужно сделать?", text: $draft.text, axis: .vertical)
+                                .lineLimit(1...6)
                         }
                     }
                     .onDelete { offsets in
@@ -154,6 +169,8 @@ struct AddRecipeView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)   // клавиатуру можно смахнуть вниз
+            .keyboardDoneButton()                       // и закрыть кнопкой «Готово»
             .navigationTitle(isEditing ? "Редактировать" : "Новый рецепт")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -179,6 +196,14 @@ struct AddRecipeView: View {
             .sheet(isPresented: $showingIngredientSheet) {
                 AddIngredientSheet { draft in
                     ingredientDrafts.append(draft)
+                }
+            }
+            // Правка существующего ингредиента: заменяем строку с тем же id.
+            .sheet(item: $editingIngredient) { draft in
+                AddIngredientSheet(draft: draft) { updated in
+                    if let index = ingredientDrafts.firstIndex(where: { $0.id == updated.id }) {
+                        ingredientDrafts[index] = updated
+                    }
                 }
             }
             .sheet(isPresented: $showingStepSheet) {
