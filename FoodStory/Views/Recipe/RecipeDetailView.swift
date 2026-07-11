@@ -20,6 +20,9 @@ struct RecipeDetailView: View {
     // Храним имена отмеченных ингредиентов.
     @State private var checkedIngredients: Set<String> = []
 
+    // Какие пункты подготовки уже сделаны (по id шага).
+    @State private var checkedPrep: Set<PersistentIdentifier> = []
+
     // Управляет открытием полноэкранного режима готовки.
     @State private var showingCooking = false
 
@@ -53,6 +56,9 @@ struct RecipeDetailView: View {
                 }
                 portionsSection
                 ingredientsSection
+                if !prepItems.isEmpty {
+                    prepSection
+                }
                 stepsSection
 
                 cookButton
@@ -308,6 +314,56 @@ struct RecipeDetailView: View {
         .padding(Metric.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
+    }
+
+    // Шаги, у которых есть заметка «подготовить заранее» — из них собирается блок.
+    private var prepItems: [Step] {
+        recipe.sortedSteps.filter {
+            !$0.prep.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    // Блок «Подготовка»: что сделать заранее, до начала готовки. С галочками,
+    // чтобы отмечать сделанное. Собирается из полей «подготовка» у шагов.
+    private var prepSection: some View {
+        VStack(alignment: .leading, spacing: Metric.spacing) {
+            Label("Подготовка", systemImage: "checklist")
+                .font(.title3.bold())
+                .foregroundStyle(Theme.textPrimary)
+
+            Text("Сделайте это заранее, до начала готовки")
+                .font(.caption)
+                .foregroundStyle(Theme.textSecondary)
+
+            ForEach(prepItems) { step in
+                Button {
+                    togglePrep(step.id)
+                } label: {
+                    HStack(alignment: .top, spacing: Metric.spacing) {
+                        Image(systemName: checkedPrep.contains(step.id)
+                              ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(checkedPrep.contains(step.id)
+                                             ? Theme.green : Theme.textSecondary)
+                        Text(step.prep)
+                            .foregroundStyle(Theme.textPrimary)
+                            .strikethrough(checkedPrep.contains(step.id))
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(Metric.padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    private func togglePrep(_ id: PersistentIdentifier) {
+        if checkedPrep.contains(id) {
+            checkedPrep.remove(id)
+        } else {
+            checkedPrep.insert(id)
+        }
     }
 
     // Пошаговая инструкция.

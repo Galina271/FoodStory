@@ -159,6 +159,18 @@ private final class PDFDrawer {
             drawText(line, font: .systemFont(ofSize: 13), color: ink, spacingAfter: 3)
         }
 
+        // Блок «Подготовка» — что сделать заранее (если у шагов есть такие заметки).
+        let prep = recipe.sortedSteps
+            .map { $0.prep.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !prep.isEmpty {
+            space(12)
+            drawText("Подготовка", font: .systemFont(ofSize: 16, weight: .semibold), color: ink, spacingAfter: 6)
+            for item in prep {
+                drawText("•  \(item)", font: .systemFont(ofSize: 13), color: ink, spacingAfter: 3)
+            }
+        }
+
         space(12)
         drawText("Приготовление", font: .systemFont(ofSize: 16, weight: .semibold), color: ink, spacingAfter: 6)
         for step in recipe.sortedSteps {

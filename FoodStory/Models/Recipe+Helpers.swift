@@ -29,7 +29,7 @@ extension Recipe {
                 Ingredient(name: $0.name, amount: $0.amount, unit: $0.unit)
             },
             steps: sortedSteps.map {
-                Step(order: $0.order, text: $0.text, timerSeconds: $0.timerSeconds)
+                Step(order: $0.order, text: $0.text, timerSeconds: $0.timerSeconds, prep: $0.prep)
             }
         )
     }
@@ -45,6 +45,16 @@ extension Recipe {
         lines.append("Ингредиенты:")
         for ingredient in ingredients {
             lines.append("• \(ingredient.name) — \(ingredient.displayAmount)")
+        }
+        let prep = sortedSteps
+            .map { $0.prep.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !prep.isEmpty {
+            lines.append("")
+            lines.append("Подготовка:")
+            for item in prep {
+                lines.append("• \(item)")
+            }
         }
         lines.append("")
         lines.append("Приготовление:")

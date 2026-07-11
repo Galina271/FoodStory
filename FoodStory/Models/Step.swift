@@ -7,10 +7,17 @@ final class Step {
     var text: String
     var timerSeconds: Int?
 
-    init(order: Int, text: String, timerSeconds: Int? = nil) {
+    // Что нужно подготовить ЗАРАНЕЕ для этого шага (например: «достать масло»,
+    // «нарезать лук»). Все такие заметки собираются в блок «Подготовка» сверху
+    // карточки рецепта. Значение по умолчанию "" — чтобы старые рецепты в базе
+    // мигрировали автоматически без потери данных.
+    var prep: String = ""
+
+    init(order: Int, text: String, timerSeconds: Int? = nil, prep: String = "") {
         self.order = order
         self.text = text
         self.timerSeconds = timerSeconds
+        self.prep = prep
     }
 
     var hasTimer: Bool {

@@ -12,6 +12,7 @@ struct StepDraft: Identifiable {
     let id = UUID()
     var text: String
     var timerMinutes: Int   // 0 = без таймера
+    var prep: String = ""   // что подготовить заранее для этого шага
 }
 
 struct AddStepSheet: View {
@@ -22,6 +23,7 @@ struct AddStepSheet: View {
     @State private var text = ""
     @State private var hasTimer = false
     @State private var minutes = 5
+    @State private var prep = ""
 
     var body: some View {
         NavigationStack {
@@ -30,6 +32,12 @@ struct AddStepSheet: View {
                     // Многострочное поле ввода.
                     TextField("Что нужно сделать?", text: $text, axis: .vertical)
                         .lineLimit(3...6)
+                }
+
+                Section("Подготовка заранее (необязательно)") {
+                    TextField("Например: достать масло, нарезать лук",
+                              text: $prep, axis: .vertical)
+                        .lineLimit(2...4)
                 }
 
                 Section {
@@ -49,7 +57,9 @@ struct AddStepSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Добавить") {
-                        let draft = StepDraft(text: text, timerMinutes: hasTimer ? minutes : 0)
+                        let draft = StepDraft(text: text,
+                                              timerMinutes: hasTimer ? minutes : 0,
+                                              prep: prep)
                         onAdd(draft)
                         dismiss()
                     }

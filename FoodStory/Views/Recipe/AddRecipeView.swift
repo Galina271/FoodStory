@@ -64,7 +64,7 @@ struct AddRecipeView: View {
             IngredientDraft(name: $0.name, amount: $0.amount, unit: $0.unit)
         })
         _stepDrafts = State(initialValue: (recipeToEdit?.sortedSteps ?? []).map {
-            StepDraft(text: $0.text, timerMinutes: ($0.timerSeconds ?? 0) / 60)
+            StepDraft(text: $0.text, timerMinutes: ($0.timerSeconds ?? 0) / 60, prep: $0.prep)
         })
     }
 
@@ -143,17 +143,34 @@ struct AddRecipeView: View {
                 }
 
                 // 3. Шаги — текст каждого шага редактируется прямо в строке.
+                // Под текстом шага — своё поле «Подготовка заранее»: всё, что там
+                // написано, соберётся в блок «Подготовка» сверху карточки рецепта.
                 Section("Шаги приготовления") {
                     ForEach($stepDrafts) { $draft in
-                        HStack(alignment: .top, spacing: 8) {
-                            if let index = stepDrafts.firstIndex(where: { $0.id == draft.id }) {
-                                Text("\(index + 1).")
-                                    .foregroundStyle(Theme.accent)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(alignment: .top, spacing: 8) {
+                                if let index = stepDrafts.firstIndex(where: { $0.id == draft.id }) {
+                                    Text("\(index + 1).")
+                                        .foregroundStyle(Theme.accent)
+                                }
+                                // Редактируемое многострочное поле — можно менять текст шага.
+                                TextField("Что нужно сделать?", text: $draft.text, axis: .vertical)
+                                    .lineLimit(1...6)
                             }
-                            // Редактируемое многострочное поле — можно менять текст шага.
-                            TextField("Что нужно сделать?", text: $draft.text, axis: .vertical)
-                                .lineLimit(1...6)
+                            // Поле подготовки для этого шага (появляется под ним).
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "checklist")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.green)
+                                    .padding(.top, 3)
+                                TextField("Подготовить заранее (необязательно)",
+                                          text: $draft.prep, axis: .vertical)
+                                    .font(.subheadline)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .lineLimit(1...4)
+                            }
                         }
+                        .padding(.vertical, 2)
                     }
                     .onDelete { offsets in
                         stepDrafts.remove(atOffsets: offsets)
@@ -258,7 +275,8 @@ struct AddRecipeView: View {
             Step(
                 order: index + 1,
                 text: draft.text,
-                timerSeconds: draft.timerMinutes > 0 ? draft.timerMinutes * 60 : nil
+                timerSeconds: draft.timerMinutes > 0 ? draft.timerMinutes * 60 : nil,
+                prep: draft.prep.trimmingCharacters(in: .whitespacesAndNewlines)
             )
         }
 
